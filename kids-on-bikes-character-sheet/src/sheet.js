@@ -2,6 +2,7 @@ import OBR from "@owlbear-rodeo/sdk";
 
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
+const POWERED_KEY = "kob-powered-sheet";
 
 const AGE_BONUSES = {
   child: ["charm", "flight"],
@@ -17,17 +18,16 @@ const TROPES = [
   { id: "bully",                    label: "Bully",                  ages: ["child","teen"],         stats: { brains:"d6",  brawn:"d12", charm:"d4",  fight:"d20", flight:"d10", grit:"d8"  } },
   { id: "conspiracy-theorist",      label: "Conspiracy Theorist",    ages: ["teen","adult"],         stats: { brains:"d20", brawn:"d4",  charm:"d6",  fight:"d12", flight:"d10", grit:"d8"  } },
   { id: "funny-sidekick",           label: "Funny Sidekick",         ages: ["child","teen"],         stats: { brains:"d8",  brawn:"d12", charm:"d20", fight:"d4",  flight:"d10", grit:"d6"  } },
-  
-  { id: "laid-back-slacker",        label: "Laid-Back Slacker",      ages: ["teen","adult"],         stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d8",  grit:"d12" } },
-  { id: "loner-weirdo",             label: "Loner Weirdo",           ages: ["child","teen"],         stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d8",  grit:"d12" } },
-  { id: "overprotective-parent",    label: "Overprotective Parent",  ages: ["adult"],                stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d8",  grit:"d12" } },
-  { id: "plastic-beauty",           label: "Plastic Beauty",         ages: ["teen"],                 stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d8",  grit:"d12" } },
-  { id: "popular-kid",              label: "Popular Kid",            ages: ["child","teen"],         stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d8",  grit:"d12" } },
-  { id: "reclusive-eccentric",      label: "Reclusive Eccentric",    ages: ["adult"],                stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d8",  grit:"d12" } },
-  { id: "scout",                    label: "Scout",                  ages: ["child","teen"],         stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d8",  grit:"d12" } },
-  { id: "stoic-professional",       label: "Stoic Professional",     ages: ["adult"],                stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d8",  grit:"d12" } },
-  { id: "wannabe",                  label: "Wannabe",                ages: ["teen"],                 stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d8",  grit:"d12" } },
-  { id: "young-provider",           label: "Young Provider",         ages: ["teen"],                 stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d8",  grit:"d12" } },
+  { id: "laid-back-slacker",        label: "Laid-Back Slacker",      ages: ["teen","adult"],         stats: { brains:"d10", brawn:"d6",  charm:"d12", fight:"d4",  flight:"d20", grit:"d8"  } },
+  { id: "loner-weirdo",             label: "Loner Weirdo",           ages: ["child","teen"],         stats: { brains:"d8",  brawn:"d10", charm:"d4",  fight:"d12", flight:"d6",  grit:"d20" } },
+  { id: "overprotective-parent",    label: "Overprotective Parent",  ages: ["adult"],                stats: { brains:"d12", brawn:"d10", charm:"d8",  fight:"d20", flight:"d6",  grit:"d4"  } },
+  { id: "plastic-beauty",           label: "Plastic Beauty",         ages: ["teen"],                 stats: { brains:"d8",  brawn:"d6",  charm:"d20", fight:"d10", flight:"d12", grit:"d4"  } },
+  { id: "popular-kid",              label: "Popular Kid",            ages: ["child","teen"],         stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d12", grit:"d8"  } },
+  { id: "reclusive-eccentric",      label: "Reclusive Eccentric",    ages: ["adult"],                stats: { brains:"d12", brawn:"d8",  charm:"d4",  fight:"d6",  flight:"d20", grit:"d10" } },
+  { id: "scout",                    label: "Scout",                  ages: ["child","teen"],         stats: { brains:"d20", brawn:"d8",  charm:"d10", fight:"d4",  flight:"d6",  grit:"d12" } },
+  { id: "stoic-professional",       label: "Stoic Professional",     ages: ["adult"],                stats: { brains:"d12", brawn:"d8",  charm:"d10", fight:"d4",  flight:"d6",  grit:"d20" } },
+  { id: "wannabe",                  label: "Wannabe",                ages: ["teen"],                 stats: { brains:"d12", brawn:"d6",  charm:"d10", fight:"d4",  flight:"d20", grit:"d8"  } },
+  { id: "young-provider",           label: "Young Provider",         ages: ["teen"],                 stats: { brains:"d8",  brawn:"d12", charm:"d10", fight:"d6",  flight:"d4",  grit:"d20" } },
 ];
 
 const STRENGTHS = [
@@ -68,6 +68,8 @@ let state = {
   editingStrengths: false,
 };
 
+let metadataListenerBound = false;
+
 let saveTimeout = null;
 function scheduleSave() {
   clearTimeout(saveTimeout);
@@ -89,6 +91,14 @@ async function load() {
 export async function initSheet(app) {
   await load();
   renderApp(app);
+
+  if (!metadataListenerBound) {
+    metadataListenerBound = true;
+    OBR.room.onMetadataChange(() => {
+      renderPartyPage();
+      renderPoweredPage();
+    });
+  }
 }
 
 function renderApp(app) {
@@ -159,6 +169,11 @@ function renderCharacterPage() {
       <span class="fl">Trope</span>
       ${tropeSelect()}
     </div>
+    ${state.trope === "custom" ? `
+    <div class="f">
+      <span class="fl">Custom</span>
+      <input class="fv" id="inp-trope-name" type="text" value="${esc(state.tropeName)}" placeholder="Name your trope…" />
+    </div>` : ""}
     <div class="f">
       <span class="fl">Age</span>
       ${ageSelect()}
@@ -217,9 +232,9 @@ function tropeSelect() {
   return `
     <select class="fsel" id="sel-trope">
       <option value="">— select —</option>
-      ${validTropes.map(t => `<option value="${t.id}" ${state.trope === t.id ? "selected" : ""}>${t.label}</option>`).join("")}
+      ${validTropes.map(t => `<option value="${t.id}" ${state.trope === t.id ? "selected" : ""}>${esc(tropeOptionLabel(t))}</option>`).join("")}
       ${invalidTropes.length ? `<optgroup label="Not available for this age">
-        ${invalidTropes.map(t => `<option value="${t.id}" disabled>${t.label}</option>`).join("")}
+        ${invalidTropes.map(t => `<option value="${t.id}" disabled>${esc(t.label)}</option>`).join("")}
       </optgroup>` : ""}
     </select>
   `;
@@ -291,6 +306,14 @@ function setupCharacterListeners() {
     scheduleSave();
     renderCharacterPage();
   });
+
+  const customTropeInput = document.getElementById("inp-trope-name");
+  if (customTropeInput) {
+    customTropeInput.addEventListener("input", e => {
+      state.tropeName = e.target.value;
+      scheduleSave();
+    });
+  }
 
   document.getElementById("sel-age").addEventListener("change", e => {
     const newAge = e.target.value;
@@ -437,7 +460,7 @@ async function loadParty() {
         </span>
       </div>
       <div class="party-details" id="pdetail-${player.id}">
-        <div class="party-detail-row"><span>Trope</span><span>${tropeLabel(data.trope)}</span></div>
+        <div class="party-detail-row"><span>Trope</span><span>${esc(tropeLabel(data.trope, data.tropeName))}</span></div>
         <div class="party-detail-row"><span>Age</span><span>${cap(data.age || "—")}</span></div>
         ${STATS.map(s => `
           <div class="party-detail-row">
@@ -464,12 +487,67 @@ async function loadParty() {
 
 function renderPoweredPage() {
   const page = document.getElementById("page-powered");
+  if (!page) return;
+
   page.innerHTML = `
     <div class="sh">Powered Character</div>
-    <div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:48px;align-items:center;">
-      Only the GM can edit this section.
+    <div id="powered-content">
+      <div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:48px;align-items:center;">
+        Loading…
+      </div>
     </div>
   `;
+
+  loadPoweredPage();
+}
+
+async function loadPoweredPage() {
+  const container = document.getElementById("powered-content");
+  if (!container) return;
+
+  const metadata = await OBR.room.getMetadata();
+  const powered = getPoweredState(metadata);
+
+  if (!hasPoweredContent(powered)) {
+    container.innerHTML = `
+      <div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:48px;align-items:center;">
+        The GM has not created a powered character yet.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="powered-field"><span class="pe-label">Name</span><span>${esc(powered.name) || "—"}</span></div>
+    <div class="powered-field"><span class="pe-label">Trope</span><span>${esc(tropeLabel(powered.trope, powered.tropeName))}</span></div>
+    <div class="powered-field"><span class="pe-label">Age</span><span>${cap(powered.age || "—")}</span></div>
+    <div class="sh">Stats</div>
+    <div class="sgrid">
+      ${STATS.map(stat => `
+        <div class="si">
+          <span class="sn">${cap(stat)}</span>
+          <span class="sd">${powered.stats?.[stat] || "—"}</span>
+        </div>
+      `).join("")}
+    </div>
+    <div class="sh">Psychic Energy</div>
+    <div class="pe-row">
+      <span class="pe-label">Current Capacity</span>
+      <span class="pe-val">${formatPsychicEnergy(powered.psychicEnergyCurrent, powered.psychicEnergyMax)}</span>
+    </div>
+    <div class="sh">Inventory</div>
+    <div id="powered-inventory-list">
+      ${powered.inventory.length
+        ? powered.inventory.map(item => `<div class="inv-item"><span>${esc(item)}</span></div>`).join("")
+        : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">No items listed.</div>`}
+    </div>
+    <div class="sh">Powers</div>
+    <div id="powered-powers-list">
+      ${renderPowersList(powered.powers)}
+    </div>
+  `;
+
+  setupPowerExpandListeners(container);
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────
@@ -483,7 +561,98 @@ function esc(str) {
   return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
-function tropeLabel(id) {
+function tropeOptionLabel(trope) {
+  if (trope.id === "custom" && state.tropeName?.trim()) {
+    return `Custom: ${state.tropeName.trim()}`;
+  }
+  return trope.label;
+}
+
+function renderPowersList(powers) {
+  if (!powers?.length) {
+    return `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">No powers listed.</div>`;
+  }
+
+  return powers.map(power => `
+    <div class="power-item">
+      <div class="power-header">
+        <span>${esc(power.title) || "Untitled Power"}</span>
+        <div class="power-header-actions">
+          ${power.cost !== "" && power.cost !== null && power.cost !== undefined
+            ? `<span class="power-cost">${esc(String(power.cost))} PE</span>`
+            : ""}
+          <button class="icon-btn power-expand" data-power-expand="${power.id}">
+            <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="2,3 5,7 8,3"/>
+            </svg>
+            <span class="tooltip">Details</span>
+          </button>
+        </div>
+      </div>
+      <div class="power-desc" id="power-${power.id}">${esc(power.description)}</div>
+    </div>
+  `).join("");
+}
+
+function setupPowerExpandListeners(container = document) {
+  container.querySelectorAll(".power-expand").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.powerExpand;
+      const detail = document.getElementById(`power-${id}`);
+      const chevron = btn.querySelector(".chevron");
+      if (!detail || !chevron) return;
+      detail.classList.toggle("open");
+      chevron.classList.toggle("open");
+    });
+  });
+}
+
+function getPoweredState(metadata) {
+  return {
+    name: "",
+    trope: "",
+    tropeName: "",
+    age: "",
+    stats: { fight: "", flight: "", brains: "", brawn: "", charm: "", grit: "" },
+    psychicEnergyCurrent: "",
+    psychicEnergyMax: "",
+    powers: [],
+    inventory: [],
+    ...(metadata[POWERED_KEY] || {}),
+    stats: {
+      fight: "",
+      flight: "",
+      brains: "",
+      brawn: "",
+      charm: "",
+      grit: "",
+      ...(metadata[POWERED_KEY]?.stats || {}),
+    },
+  };
+}
+
+function hasPoweredContent(powered) {
+  return Boolean(
+    powered.name ||
+    powered.trope ||
+    powered.age ||
+    powered.inventory.length ||
+    powered.powers.length ||
+    Object.values(powered.stats || {}).some(Boolean) ||
+    powered.psychicEnergyCurrent !== "" ||
+    powered.psychicEnergyMax !== ""
+  );
+}
+
+function formatPsychicEnergy(current, max) {
+  const currentValue = current === "" || current === null || current === undefined ? "0" : String(current);
+  const maxValue = max === "" || max === null || max === undefined ? "0" : String(max);
+  return `${currentValue} out of ${maxValue}`;
+}
+
+function tropeLabel(id, customName = "") {
   const t = TROPES.find(t => t.id === id);
-  return t ? t.label : "—";
+  if (!t) return "—";
+  if (t.id === "custom" && customName.trim()) return customName.trim();
+  return t.label;
 }

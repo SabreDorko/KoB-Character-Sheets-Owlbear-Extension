@@ -24,8 +24,8 @@ body {
   background: transparent;
   margin: 0;
   padding: 0;
-  min-width: 360px;
-  max-width: 360px;
+  min-width: 384px;
+  max-width: 384px;
 }
 
 /* THEME */
@@ -118,7 +118,7 @@ body.dark  { background: var(--dl); }
 /* PAGE */
 .page {
   padding: 0 12px;
-  min-height: 500px;
+  min-height: 588px;
   background-size: 100% 24px;
   background-position: 0 0;
   display: none;
@@ -499,6 +499,12 @@ input.inv-input {
 .light .power-header { color: var(--pk); }
 .dark  .power-header { color: var(--dk); }
 
+.power-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .power-cost {
   font-size: 9px;
   padding: 1px 5px;
@@ -516,6 +522,48 @@ input.inv-input {
 .power-desc.open { display: block; }
 .light .power-desc { color: var(--pkm); }
 .dark  .power-desc { color: var(--dkm); }
+
+.power-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 0;
+}
+
+.power-form-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.power-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.power-input {
+  width: 100%;
+  font-size: 12px;
+  border: 0.5px solid;
+  border-radius: 4px;
+  background: transparent;
+  padding: 6px 8px;
+  outline: none;
+  font-family: inherit;
+}
+
+.power-textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.light .power-input { border-color: var(--pr); color: var(--pk); }
+.dark  .power-input { border-color: var(--dr); color: var(--dk); }
+.light .power-input::placeholder { color: var(--pkf); }
+.dark  .power-input::placeholder { color: var(--dkf); }
 
 /* PSYCHIC ENERGY */
 .pe-row {
