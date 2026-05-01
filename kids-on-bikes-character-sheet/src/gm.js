@@ -283,10 +283,10 @@ function renderPoweredPage() {
     </div>
     <div class="sh">Psychic Energy</div>
     <div class="f pe-edit-row">
-      <span class="fl">Current/Max</span>
+      <span class="fl">PE</span>
       <div class="pe-edit-fields">
         <input class="fv pe-edit-input" id="inp-powered-pe-current" type="number" min="0" value="${esc(String(poweredState.psychicEnergyCurrent))}" placeholder="0" />
-        <span class="pe-edit-sep">out of</span>
+        <span class="pe-edit-sep">/</span>
         <input class="fv pe-edit-input" id="inp-powered-pe-max" type="number" min="0" value="${esc(String(poweredState.psychicEnergyMax))}" placeholder="0" />
       </div>
     </div>
