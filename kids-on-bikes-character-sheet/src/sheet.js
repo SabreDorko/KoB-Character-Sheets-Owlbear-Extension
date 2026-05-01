@@ -279,7 +279,7 @@ function renderStrengthsList(grantedIds) {
             : ""}
           <button class="icon-btn str-expand" data-expand="${id}">
             <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="2,3 5,7 8,3"/>
+              <polyline points="6,2 2,5 6,8"/>
             </svg>
             <span class="tooltip">Details</span>
           </button>
@@ -449,15 +449,20 @@ async function loadParty() {
     return;
   }
 
-  list.innerHTML = sheets.map(({ player, data }) => `
+  list.innerHTML = sheets.map(({ player, data }) => {
+    const bonused = AGE_BONUSES[data.age] || [];
+    return `
     <div class="party-item">
       <div class="party-header" data-pid="${player.id}">
-        <span>${esc(data.name)}</span>
-        <span class="chevron">
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="2,3 5,7 8,3"/>
-          </svg>
-        </span>
+        <span class="party-player-meta">${esc(data.name)} <span>&bull;</span> <em>${esc(player.name)}</em></span>
+        <div class="party-header-right">
+          <span class="party-token">${data.tokens ?? 0}</span>
+          <span class="chevron party-chevron">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6,2 2,5 6,8"/>
+            </svg>
+          </span>
+        </div>
       </div>
       <div class="party-details" id="pdetail-${player.id}">
         <div class="party-detail-row"><span>Trope</span><span>${esc(tropeLabel(data.trope, data.tropeName))}</span></div>
@@ -465,18 +470,18 @@ async function loadParty() {
         ${STATS.map(s => `
           <div class="party-detail-row">
             <span>${cap(s)}</span>
-            <span>${data.stats?.[s] || "—"}</span>
+            <span>${formatStatDie(data.stats?.[s], bonused.includes(s))}</span>
           </div>
         `).join("")}
-        <div class="party-detail-row"><span>Adversity</span><span>${data.tokens ?? 0}</span></div>
       </div>
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   list.querySelectorAll(".party-header").forEach(header => {
     header.addEventListener("click", () => {
       const detail = document.getElementById(`pdetail-${header.dataset.pid}`);
-      const chevron = header.querySelector(".chevron");
+      const chevron = header.querySelector(".party-chevron");
       detail.classList.toggle("open");
       chevron.classList.toggle("open");
     });
@@ -523,12 +528,15 @@ async function loadPoweredPage() {
     <div class="powered-field"><span class="pe-label">Age</span><span>${cap(powered.age || "—")}</span></div>
     <div class="sh">Stats</div>
     <div class="sgrid">
-      ${STATS.map(stat => `
+      ${(() => {
+        const bonused = AGE_BONUSES[powered.age] || [];
+        return STATS.map(stat => `
         <div class="si">
-          <span class="sn">${cap(stat)}</span>
-          <span class="sd">${powered.stats?.[stat] || "—"}</span>
+          <span class="sn">${cap(stat)}${bonused.includes(stat) ? `<span class="sb">+1</span>` : ""}</span>
+          <span class="sd">${formatStatDie(powered.stats?.[stat], bonused.includes(stat))}</span>
         </div>
-      `).join("")}
+      `).join("");
+      })()}
     </div>
     <div class="sh">Psychic Energy</div>
     <div class="pe-row">
@@ -583,7 +591,7 @@ function renderPowersList(powers) {
             : ""}
           <button class="icon-btn power-expand" data-power-expand="${power.id}">
             <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="2,3 5,7 8,3"/>
+              <polyline points="6,2 2,5 6,8"/>
             </svg>
             <span class="tooltip">Details</span>
           </button>
@@ -648,6 +656,11 @@ function formatPsychicEnergy(current, max) {
   const currentValue = current === "" || current === null || current === undefined ? "0" : String(current);
   const maxValue = max === "" || max === null || max === undefined ? "0" : String(max);
   return `${currentValue} out of ${maxValue}`;
+}
+
+function formatStatDie(die, bonused) {
+  if (!die) return "—";
+  return bonused ? `${die}+1` : die;
 }
 
 function tropeLabel(id, customName = "") {
