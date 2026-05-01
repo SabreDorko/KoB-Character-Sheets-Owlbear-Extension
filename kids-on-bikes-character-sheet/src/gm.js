@@ -150,7 +150,7 @@ async function loadPartyPage() {
         <div class="party-header" data-pid="${player.id}">
           <span class="party-player-meta">${esc(data.name || player.name)} <span>&bull;</span> <em>${esc(player.name)}</em></span>
           <div class="party-header-right">
-            <span class="party-token">${data.tokens ?? 0}</span>
+            <span class="party-token">Adversity Tokens: ${data.tokens ?? 0}</span>
             <button class="str-add-btn" data-view-player="${player.id}" type="button">View</button>
             <span class="chevron party-chevron">
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -282,8 +282,7 @@ function renderPoweredPage() {
       `).join("")}
     </div>
     <div class="sh">Psychic Energy</div>
-    <div class="f pe-edit-row">
-      <span class="fl">PE</span>
+    <div class="pe-edit-row">
       <div class="pe-edit-fields">
         <input class="fv pe-edit-input" id="inp-powered-pe-current" type="number" min="0" value="${esc(String(poweredState.psychicEnergyCurrent))}" placeholder="0" />
         <span class="pe-edit-sep">/</span>

@@ -611,16 +611,16 @@ input.inv-input {
 }
 
 .pe-edit-row {
+  display: flex;
+  justify-content: flex-start;
   align-items: center;
+  height: 24px;
 }
 
 .pe-edit-fields {
-  flex: 1;
   display: flex;
-  justify-content: flex-end;
   align-items: center;
   gap: 6px;
-  min-width: 0;
 }
 
 .pe-edit-input {
