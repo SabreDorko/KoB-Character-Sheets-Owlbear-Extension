@@ -10,6 +10,12 @@ const AGE_BONUSES = {
   adult: ["brains", "grit"],
 };
 
+const AGE_GRANTED = {
+  child: ["quick-healing"],
+  teen: ["rebellious"],
+  adult: ["skilled-at-___"],
+};
+
 const TROPES = [
   { id: "custom", label: "Custom", ages: ["child", "teen", "adult"], stats: {} },
   { id: "blue-collar-worker", label: "Blue-Collar Worker", ages: ["adult"], stats: { brains: "d6", brawn: "d20", charm: "d8", fight: "d12", flight: "d4", grit: "d10" } },
@@ -236,9 +242,16 @@ async function loadPlayerSheetView() {
     </div>
     <div class="sh">Strengths</div>
     <div>
-      ${(data.strengths || []).length
-        ? data.strengths.map(id => `<div class="inv-item"><span>${esc(strengthLabel(id))}</span></div>`).join("")
-        : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">No strengths listed.</div>`}
+      ${(() => {
+        const grantedIds = AGE_GRANTED[data.age] || [];
+        const allStrengths = [
+          ...grantedIds,
+          ...(data.strengths || [])
+        ];
+        return allStrengths.length
+          ? allStrengths.map(id => `<div class="inv-item"><span>${esc(strengthLabel(id))}</span></div>`).join("")
+          : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">No strengths listed.</div>`;
+      })()}
     </div>
   `;
 }
@@ -271,15 +284,20 @@ function renderPoweredPage() {
     </div>
     <div class="sh">Stats</div>
     <div class="sgrid">
-      ${STATS.map(stat => `
+      ${STATS.map(stat => {
+        const usedDice = Object.entries(poweredState.stats)
+          .filter(([s, die]) => die && s !== stat)
+          .map(([_, die]) => die);
+        const availableDice = DIES.filter(d => !usedDice.includes(d));
+        return `
         <div class="si">
           <span class="sn">${cap(stat)}${bonused.includes(stat) ? `<span class="sb">+1</span>` : ""}</span>
           <select class="sdie" id="powered-stat-${stat}">
             <option value="">-</option>
-            ${DIES.map(die => `<option value="${die}" ${poweredState.stats[stat] === die ? "selected" : ""}>${die}</option>`).join("")}
+            ${availableDice.map(die => `<option value="${die}" ${poweredState.stats[stat] === die ? "selected" : ""}>${die}</option>`).join("")}
           </select>
         </div>
-      `).join("")}
+      `}).join("")}
     </div>
     <div class="sh">Psychic Energy</div>
     <div class="pe-edit-row">
@@ -600,8 +618,12 @@ function formatStatDie(die, bonused) {
   return bonused ? `${die}+1` : die;
 }
 
-function strengthLabel(id) {
-  if (!id) return "-";
+function strengthLabel(strOrId) {
+  if (!strOrId) return "-";
+  // Handle both string IDs and objects { id, value }
+  const id = typeof strOrId === "string" ? strOrId : strOrId.id;
+  const value = typeof strOrId === "string" ? "" : strOrId.value;
+  if (id === "skilled-at-___" && value) return `Skilled at ${value}`;
   return id
     .split("-")
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))

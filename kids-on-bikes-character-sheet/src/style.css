@@ -625,7 +625,7 @@ input.inv-input {
 
 .pe-edit-input {
   width: 2ch;
-  min-width: 2ch;
+  min-width: 32px;
   text-align: center;
 }
 

@@ -180,15 +180,20 @@ function renderCharacterPage() {
     </div>
     <div class="sh">Stats</div>
     <div class="sgrid">
-      ${STATS.map(s => `
+      ${STATS.map(s => {
+        const usedDice = Object.entries(state.stats)
+          .filter(([stat, die]) => die && stat !== s)
+          .map(([_, die]) => die);
+        const availableDice = DIES.filter(d => !usedDice.includes(d));
+        return `
         <div class="si">
           <span class="sn">${cap(s)}${bonused.includes(s) ? `<span class="sb">+1</span>` : ""}</span>
           <select class="sdie" id="stat-${s}">
             <option value="">—</option>
-            ${DIES.map(d => `<option value="${d}" ${state.stats[s] === d ? "selected" : ""}>${d}</option>`).join("")}
+            ${availableDice.map(d => `<option value="${d}" ${state.stats[s] === d ? "selected" : ""}>${d}</option>`).join("")}
           </select>
         </div>
-      `).join("")}
+      `}).join("")}
     </div>
     <div class="sh">Adversity Tokens</div>
     <div class="ctr">
@@ -211,10 +216,16 @@ function renderCharacterPage() {
       <select class="str-add-sel" id="str-add-sel">
         <option value="">— add strength —</option>
         ${STRENGTHS
-          .filter(s => !state.strengths.includes(s.id) && !grantedIds.includes(s.id))
+          .filter(s => {
+            const isGranted = grantedIds.includes(s.id);
+            const isAdded = state.strengths.some(str => (typeof str === "string" ? str : str.id) === s.id);
+            // Allow skilled-at-___ multiple times, but filter out other already-added strengths
+            return !isGranted && (!isAdded || s.id === "skilled-at-___");
+          })
           .map(s => `<option value="${s.id}">${s.label}</option>`)
           .join("")}
       </select>
+      <input class="str-add-input" id="str-add-input" type="text" placeholder="Skill (if needed)" style="display:none;" />
       <button class="str-add-btn" id="str-add-btn">Add</button>
     </div>
   `;
@@ -259,25 +270,28 @@ function ageSelect() {
 }
 
 function renderStrengthsList(grantedIds) {
+  const normalizeStrength = (s) => typeof s === "string" ? { id: s, value: "" } : s;
   const allActive = [
-    ...grantedIds.map(id => ({ id, granted: true })),
-    ...state.strengths.filter(id => !grantedIds.includes(id)).map(id => ({ id, granted: false })),
+    ...grantedIds.map(id => ({ id, value: "", granted: true })),
+    ...state.strengths.map(normalizeStrength).filter(str => !grantedIds.includes(str.id)).map(str => ({ ...str, granted: false })),
   ];
   if (!allActive.length) return "";
-  return allActive.map(({ id, granted }) => {
+  return allActive.map(({ id, value, granted }) => {
     const s = STRENGTHS.find(x => x.id === id);
     if (!s) return "";
+    const displayLabel = id === "skilled-at-___" && value ? `Skilled at ${value}` : s.label;
+    const dataKey = id === "skilled-at-___" && value ? value : id;
     return `
-      <div class="str" data-sid="${id}">
+      <div class="str" data-sid="${dataKey}">
         <div class="str-left">
-          <span class="str-name">${s.label}</span>
+          <span class="str-name">${displayLabel}</span>
           ${granted ? `<span class="str-age">age</span>` : ""}
         </div>
         <div style="display:flex;align-items:center;gap:2px;">
           ${state.editingStrengths && !granted
-            ? `<button class="str-remove" data-remove="${id}">×</button>`
+            ? `<button class="str-remove" data-remove="${dataKey}">×</button>`
             : ""}
-          <button class="icon-btn str-expand" data-expand="${id}">
+          <button class="icon-btn str-expand" data-expand="${dataKey}">
             <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="6,2 2,5 6,8"/>
             </svg>
@@ -285,7 +299,7 @@ function renderStrengthsList(grantedIds) {
           </button>
         </div>
       </div>
-      <div class="str-detail" id="detail-${id}">${s.desc}</div>
+      <div class="str-detail" id="detail-${dataKey}">${s.desc}</div>
     `;
   }).join("");
 }
@@ -324,7 +338,13 @@ function setupCharacterListeners() {
       }
     }
     state.age = newAge;
-    state.strengths = state.strengths.filter(id => !(AGE_GRANTED[newAge] || []).includes(id));
+    const grantedForNewAge = AGE_GRANTED[newAge] || [];
+    // Filter out strengths that were granted by a different age
+    state.strengths = state.strengths.filter(s => {
+      const strId = typeof s === "string" ? s : s.id;
+      // Keep if it's not age-granted, or if it's granted by the new age
+      return !Object.values(AGE_GRANTED).flat().includes(strId) || grantedForNewAge.includes(strId);
+    });
     scheduleSave();
     renderCharacterPage();
   });
@@ -353,10 +373,26 @@ function setupCharacterListeners() {
     renderCharacterPage();
   });
 
+  const skillInput = document.getElementById("str-add-input");
+  document.getElementById("str-add-sel").addEventListener("change", e => {
+    if (e.target.value === "skilled-at-___") {
+      skillInput.style.display = "block";
+    } else {
+      skillInput.style.display = "none";
+      skillInput.value = "";
+    }
+  });
+
   document.getElementById("str-add-btn").addEventListener("click", () => {
     const sel = document.getElementById("str-add-sel");
     if (!sel.value) return;
-    state.strengths.push(sel.value);
+    if (sel.value === "skilled-at-___") {
+      const skillValue = skillInput.value.trim();
+      if (!skillValue) return;
+      state.strengths.push({ id: "skilled-at-___", value: skillValue });
+    } else {
+      state.strengths.push(sel.value);
+    }
     scheduleSave();
     renderCharacterPage();
   });
@@ -373,8 +409,14 @@ function setupCharacterListeners() {
 
   document.querySelectorAll("[data-remove]").forEach(btn => {
     btn.addEventListener("click", () => {
-      const id = btn.dataset.remove;
-      state.strengths = state.strengths.filter(s => s !== id);
+      const removeKey = btn.dataset.remove;
+      // Handle both string IDs and objects with skill value
+      state.strengths = state.strengths.filter(s => {
+        const strId = typeof s === "string" ? s : s.id;
+        const strValue = typeof s === "string" ? "" : s.value;
+        const matchKey = strId === "skilled-at-___" && strValue ? strValue : strId;
+        return matchKey !== removeKey;
+      });
       scheduleSave();
       renderCharacterPage();
     });
