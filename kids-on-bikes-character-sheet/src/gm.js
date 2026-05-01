@@ -377,18 +377,26 @@ function setupPoweredListeners() {
 
   document.getElementById("inp-powered-pe-current").addEventListener("input", event => {
     poweredState.psychicEnergyCurrent = normalizeNumberInput(event.target.value);
+    resizePeInput(event.target);
     schedulePoweredSave();
   });
 
   document.getElementById("inp-powered-pe-max").addEventListener("input", event => {
     const normalizedMax = normalizeNumberInput(event.target.value);
     poweredState.psychicEnergyMax = normalizedMax;
+    resizePeInput(event.target);
     if (normalizedMax !== "") {
       poweredState.psychicEnergyCurrent = normalizedMax;
       const currentInput = document.getElementById("inp-powered-pe-current");
-      if (currentInput) currentInput.value = normalizedMax;
+      if (currentInput) { currentInput.value = normalizedMax; resizePeInput(currentInput); }
     }
     schedulePoweredSave();
+  });
+
+  // size inputs to their initial values
+  ["inp-powered-pe-current", "inp-powered-pe-max"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) resizePeInput(el);
   });
 
   document.getElementById("powered-inv-add-btn").addEventListener("click", () => {
@@ -580,6 +588,11 @@ function getPoweredState(metadata) {
 
 function normalizeNumberInput(value) {
   return value === "" ? "" : String(Math.max(0, Number(value)));
+}
+
+function resizePeInput(el) {
+  const len = el.value.length || el.placeholder.length;
+  el.style.width = `${Math.max(2, len)}ch`;
 }
 
 function formatStatDie(die, bonused) {
