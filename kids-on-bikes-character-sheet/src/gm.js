@@ -36,6 +36,7 @@ let saveTimeout = null;
 let editingPowerId = null;
 let editingPowers = false;
 let selectedPlayerId = null;
+let gmTheme = "light";
 
 export async function initGM(app) {
   appRoot = app;
@@ -52,9 +53,15 @@ export async function initGM(app) {
 
 function renderGMApp() {
   appRoot.innerHTML = `
-    <div class="light">
+    <div class="${gmTheme}">
       <div class="book-header">
-        <span class="book-title">Kids on Bikes GM</span>
+        <span class="book-title">Kids on Bikes • GM</span>
+        <div class="tog-row">
+          <span class="tog-label">${gmTheme === "dark" ? "Dark" : "Light"}</span>
+          <div class="tog" id="gm-theme-tog" role="switch" aria-checked="${gmTheme === "dark"}">
+            <div class="tog-thumb"></div>
+          </div>
+        </div>
       </div>
       <div class="top-tabs">
         <div class="top-tab active" data-tab="party">Party</div>
@@ -64,6 +71,11 @@ function renderGMApp() {
       <div class="page" data-page="powered" id="page-powered"></div>
     </div>
   `;
+
+  document.getElementById("gm-theme-tog").addEventListener("click", () => {
+    gmTheme = gmTheme === "light" ? "dark" : "light";
+    renderGMApp();
+  });
 
   setupTabListeners();
   renderPartyPage();

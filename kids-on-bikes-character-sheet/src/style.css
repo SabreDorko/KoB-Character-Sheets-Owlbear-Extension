@@ -191,7 +191,7 @@ select.fsel {
   background: transparent;
   flex: 1;
   text-align: right;
-  padding: 0 16px 0 0;
+  padding: 0 12px 0 0;
   cursor: pointer;
   min-width: 0;
   font-family: inherit;
@@ -659,4 +659,4 @@ input.inv-input {
   display: flex;
   align-items: center;
 }
-.chevron.open { transform: rotate(90deg); }
+.chevron.open { transform: rotate(-90deg); }
