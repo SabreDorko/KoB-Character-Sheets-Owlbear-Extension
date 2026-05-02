@@ -244,16 +244,28 @@ async function loadPlayerSheetView() {
     <div>
       ${(() => {
         const grantedIds = AGE_GRANTED[data.age] || [];
-        const allStrengths = [
-          ...grantedIds,
-          ...(data.strengths || [])
-        ];
+        const allStrengths = mergeStrengthEntries(grantedIds, data.strengths || []);
         return allStrengths.length
-          ? allStrengths.map(id => `<div class="inv-item"><span>${esc(strengthLabel(id))}</span></div>`).join("")
+          ? allStrengths.map((strength, index) => `
+              <div class="str">
+                <div class="str-left">
+                  <span class="str-name">${esc(strengthLabel(strength))}</span>
+                </div>
+                <button class="icon-btn gm-strength-expand" data-gm-strength-expand="${index}" type="button">
+                  <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6,2 2,5 6,8"/>
+                  </svg>
+                  <span class="tooltip">Details</span>
+                </button>
+              </div>
+              <div class="str-detail" id="gm-strength-detail-${index}">${esc(strengthDescription(strength))}</div>
+            `).join("")
           : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">No strengths listed.</div>`;
       })()}
     </div>
   `;
+
+  setupGMStrengthExpandListeners(container);
 }
 
 function renderPoweredPage() {
@@ -548,6 +560,18 @@ function setupPowerExpandListeners() {
   });
 }
 
+function setupGMStrengthExpandListeners(container) {
+  container.querySelectorAll(".gm-strength-expand").forEach(button => {
+    button.addEventListener("click", () => {
+      const detail = document.getElementById(`gm-strength-detail-${button.dataset.gmStrengthExpand}`);
+      const chevron = button.querySelector(".chevron");
+      if (!detail || !chevron) return;
+      detail.classList.toggle("open");
+      chevron.classList.toggle("open");
+    });
+  });
+}
+
 function tropeSelect(currentState) {
   const validTropes = TROPES.filter(trope => !currentState.age || trope.ages.includes(currentState.age));
   const invalidTropes = TROPES.filter(trope => currentState.age && !trope.ages.includes(currentState.age));
@@ -618,8 +642,43 @@ function formatStatDie(die, bonused) {
   return bonused ? `${die}+1` : die;
 }
 
+function strengthEntryKey(strOrId) {
+  if (!strOrId) return "";
+  if (typeof strOrId === "string") return `base:${strOrId}`;
+  if (strOrId.type === "custom") {
+    return `custom:${strOrId.title || ""}:${strOrId.description || ""}`;
+  }
+  return strOrId.id === "skilled-at-___"
+    ? `skill:${strOrId.value || ""}`
+    : `base:${strOrId.id}`;
+}
+
+function mergeStrengthEntries(grantedIds, savedStrengths) {
+  const merged = [...grantedIds, ...savedStrengths];
+  const seen = new Set();
+  return merged.filter(strength => {
+    const key = strengthEntryKey(strength);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function strengthDescription(strOrId) {
+  if (!strOrId) return "-";
+  if (typeof strOrId === "object" && strOrId.type === "custom") {
+    return strOrId.description || "-";
+  }
+  const id = typeof strOrId === "string" ? strOrId : strOrId.id;
+  const strength = STRENGTHS.find(item => item.id === id);
+  return strength?.desc || "-";
+}
+
 function strengthLabel(strOrId) {
   if (!strOrId) return "-";
+  if (typeof strOrId === "object" && strOrId.type === "custom") {
+    return strOrId.title || "Custom Strength";
+  }
   // Handle both string IDs and objects { id, value }
   const id = typeof strOrId === "string" ? strOrId : strOrId.id;
   const value = typeof strOrId === "string" ? "" : strOrId.value;

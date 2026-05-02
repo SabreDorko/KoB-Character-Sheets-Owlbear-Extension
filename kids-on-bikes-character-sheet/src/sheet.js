@@ -68,6 +68,8 @@ let state = {
   editingStrengths: false,
 };
 
+let strengthEditor = emptyStrengthEditor();
+
 let metadataListenerBound = false;
 
 let saveTimeout = null;
@@ -218,16 +220,18 @@ function renderCharacterPage() {
         ${STRENGTHS
           .filter(s => {
             const isGranted = grantedIds.includes(s.id);
-            const isAdded = state.strengths.some(str => (typeof str === "string" ? str : str.id) === s.id);
+            const isAdded = state.strengths.some(str => getStrengthId(str) === s.id);
             // Allow skilled-at-___ multiple times, but filter out other already-added strengths
             return !isGranted && (!isAdded || s.id === "skilled-at-___");
           })
-          .map(s => `<option value="${s.id}">${s.label}</option>`)
+          .map(s => `<option value="${s.id}" ${strengthEditor.type === s.id ? "selected" : ""}>${s.label}</option>`)
           .join("")}
+        <option value="custom" ${strengthEditor.type === "custom" ? "selected" : ""}>Custom</option>
       </select>
-      <input class="str-add-input" id="str-add-input" type="text" placeholder="Skill (if needed)" style="display:none;" />
-      <button class="str-add-btn" id="str-add-btn">Add</button>
+      <button class="str-add-btn" id="str-add-btn" type="button">${strengthEditor.index === null ? "Add" : "Save"}</button>
+      ${strengthEditor.type ? `<button class="str-add-btn" id="str-cancel-btn" type="button">Cancel</button>` : ""}
     </div>
+    ${state.editingStrengths ? renderStrengthEditor() : ""}
   `;
 
   setupCharacterListeners();
@@ -269,29 +273,113 @@ function ageSelect() {
   `;
 }
 
+function emptyStrengthEditor() {
+  return {
+    type: "",
+    index: null,
+    value: "",
+    title: "",
+    description: "",
+  };
+}
+
+function getStrengthId(entry) {
+  if (!entry) return "";
+  if (typeof entry === "string") return entry;
+  if (entry.type === "custom") return "custom";
+  return entry.id || "";
+}
+
+function resolveStrengthEntry(entry, index, granted = false) {
+  if (typeof entry === "string") {
+    const strength = STRENGTHS.find(item => item.id === entry);
+    if (!strength) return null;
+    return {
+      key: granted ? `granted-${entry}` : `owned-${index}`,
+      index,
+      granted,
+      editable: false,
+      label: strength.label,
+      desc: strength.desc,
+    };
+  }
+
+  if (entry?.type === "custom") {
+    return {
+      key: `owned-${index}`,
+      index,
+      granted,
+      editable: !granted,
+      label: entry.title || "Custom Strength",
+      desc: entry.description || "",
+      isCustom: true,
+    };
+  }
+
+  const strength = STRENGTHS.find(item => item.id === entry?.id);
+  if (!strength) return null;
+
+  return {
+    key: granted ? `granted-${entry.id}` : `owned-${index}`,
+    index,
+    granted,
+    editable: false,
+    label: entry.id === "skilled-at-___" && entry.value ? `Skilled at ${entry.value}` : strength.label,
+    desc: strength.desc,
+  };
+}
+
+function renderStrengthEditor() {
+  if (!strengthEditor.type) return "";
+
+  if (strengthEditor.type === "skilled-at-___") {
+    return `
+      <div class="str-editor">
+        <input class="power-input" id="str-add-skill" type="text" value="${esc(strengthEditor.value)}" placeholder="Skill name" />
+      </div>
+    `;
+  }
+
+  if (strengthEditor.type === "custom") {
+    return `
+      <div class="str-editor">
+        <input class="power-input" id="str-custom-title" type="text" value="${esc(strengthEditor.title)}" placeholder="Custom strength title" />
+        <textarea class="power-input power-textarea str-custom-desc" id="str-custom-desc" placeholder="Custom strength description">${esc(strengthEditor.description)}</textarea>
+      </div>
+    `;
+  }
+
+  return "";
+}
+
 function renderStrengthsList(grantedIds) {
-  const normalizeStrength = (s) => typeof s === "string" ? { id: s, value: "" } : s;
   const allActive = [
-    ...grantedIds.map(id => ({ id, value: "", granted: true })),
-    ...state.strengths.map(normalizeStrength).filter(str => !grantedIds.includes(str.id)).map(str => ({ ...str, granted: false })),
+    ...grantedIds.map(id => resolveStrengthEntry(id, -1, true)).filter(Boolean),
+    ...state.strengths
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => {
+        const id = getStrengthId(entry);
+        return id === "custom" || !grantedIds.includes(id);
+      })
+      .map(({ entry, index }) => resolveStrengthEntry(entry, index, false))
+      .filter(Boolean),
   ];
   if (!allActive.length) return "";
-  return allActive.map(({ id, value, granted }) => {
-    const s = STRENGTHS.find(x => x.id === id);
-    if (!s) return "";
-    const displayLabel = id === "skilled-at-___" && value ? `Skilled at ${value}` : s.label;
-    const dataKey = id === "skilled-at-___" && value ? value : id;
+  return allActive.map(({ key, index, granted, editable, label, desc, isCustom }) => {
     return `
-      <div class="str" data-sid="${dataKey}">
+      <div class="str" data-sid="${key}">
         <div class="str-left">
-          <span class="str-name">${displayLabel}</span>
+          <span class="str-name">${esc(label)}</span>
           ${granted ? `<span class="str-age">age</span>` : ""}
         </div>
         <div style="display:flex;align-items:center;gap:2px;">
-          ${state.editingStrengths && !granted
-            ? `<button class="str-remove" data-remove="${dataKey}">×</button>`
+          ${state.editingStrengths && editable
+            ? `<button class="str-add-btn" data-edit-custom="${index}" type="button">Edit</button>`
             : ""}
-          <button class="icon-btn str-expand" data-expand="${dataKey}">
+          ${state.editingStrengths && !granted
+            ? `<button class="str-remove" data-remove-index="${index}">×</button>`
+            : ""}
+          <button class="icon-btn str-expand" data-expand="${key}">
             <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="6,2 2,5 6,8"/>
             </svg>
@@ -299,7 +387,7 @@ function renderStrengthsList(grantedIds) {
           </button>
         </div>
       </div>
-      <div class="str-detail" id="detail-${dataKey}">${s.desc}</div>
+      <div class="str-detail" id="detail-${key}">${esc(desc)}${isCustom && !desc ? "No description." : ""}</div>
     `;
   }).join("");
 }
@@ -370,30 +458,52 @@ function setupCharacterListeners() {
 
   document.getElementById("str-edit-btn").addEventListener("click", () => {
     state.editingStrengths = !state.editingStrengths;
+    if (!state.editingStrengths) strengthEditor = emptyStrengthEditor();
     renderCharacterPage();
   });
 
-  const skillInput = document.getElementById("str-add-input");
   document.getElementById("str-add-sel").addEventListener("change", e => {
-    if (e.target.value === "skilled-at-___") {
-      skillInput.style.display = "block";
-    } else {
-      skillInput.style.display = "none";
-      skillInput.value = "";
-    }
+    strengthEditor = {
+      type: e.target.value,
+      index: null,
+      value: "",
+      title: "",
+      description: "",
+    };
+    renderCharacterPage();
   });
 
   document.getElementById("str-add-btn").addEventListener("click", () => {
     const sel = document.getElementById("str-add-sel");
     if (!sel.value) return;
+
+    let nextStrength;
     if (sel.value === "skilled-at-___") {
-      const skillValue = skillInput.value.trim();
+      const skillValue = document.getElementById("str-add-skill")?.value.trim() || "";
       if (!skillValue) return;
-      state.strengths.push({ id: "skilled-at-___", value: skillValue });
+      nextStrength = { id: "skilled-at-___", value: skillValue };
+    } else if (sel.value === "custom") {
+      const title = document.getElementById("str-custom-title")?.value.trim() || "";
+      const description = document.getElementById("str-custom-desc")?.value.trim() || "";
+      if (!title || !description) return;
+      nextStrength = { type: "custom", title, description };
     } else {
-      state.strengths.push(sel.value);
+      nextStrength = sel.value;
     }
+
+    if (strengthEditor.index === null) {
+      state.strengths.push(nextStrength);
+    } else {
+      state.strengths[strengthEditor.index] = nextStrength;
+    }
+
+    strengthEditor = emptyStrengthEditor();
     scheduleSave();
+    renderCharacterPage();
+  });
+
+  document.getElementById("str-cancel-btn")?.addEventListener("click", () => {
+    strengthEditor = emptyStrengthEditor();
     renderCharacterPage();
   });
 
@@ -407,16 +517,30 @@ function setupCharacterListeners() {
     });
   });
 
-  document.querySelectorAll("[data-remove]").forEach(btn => {
+  document.querySelectorAll("[data-edit-custom]").forEach(btn => {
     btn.addEventListener("click", () => {
-      const removeKey = btn.dataset.remove;
-      // Handle both string IDs and objects with skill value
-      state.strengths = state.strengths.filter(s => {
-        const strId = typeof s === "string" ? s : s.id;
-        const strValue = typeof s === "string" ? "" : s.value;
-        const matchKey = strId === "skilled-at-___" && strValue ? strValue : strId;
-        return matchKey !== removeKey;
-      });
+      const index = Number(btn.dataset.editCustom);
+      const entry = state.strengths[index];
+      if (!entry || entry.type !== "custom") return;
+      strengthEditor = {
+        type: "custom",
+        index,
+        value: "",
+        title: entry.title || "",
+        description: entry.description || "",
+      };
+      renderCharacterPage();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-index]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const index = Number(btn.dataset.removeIndex);
+      state.strengths.splice(index, 1);
+      if (strengthEditor.index === index) strengthEditor = emptyStrengthEditor();
+      if (strengthEditor.index !== null && strengthEditor.index > index) {
+        strengthEditor = { ...strengthEditor, index: strengthEditor.index - 1 };
+      }
       scheduleSave();
       renderCharacterPage();
     });

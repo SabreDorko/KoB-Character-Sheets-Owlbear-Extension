@@ -388,6 +388,16 @@ select.sdie {
 }
 .str-add-row.visible { display: flex; }
 
+.str-editor {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.str-custom-desc {
+  min-height: 72px;
+}
+
 select.str-add-sel {
   font-size: 12px;
   height: 20px;
