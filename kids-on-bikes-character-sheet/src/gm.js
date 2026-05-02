@@ -44,6 +44,7 @@ let editingPowers = false;
 let selectedPlayerId = null;
 let gmTheme = "light";
 let cachedPlayers = [];
+let cachedMetadata = {};
 
 export async function initGM(app) {
   appRoot = app;
@@ -61,6 +62,7 @@ export async function initGM(app) {
   });
 
   OBR.room.onMetadataChange(metadataUpdate => {
+    cachedMetadata = metadataUpdate;
     poweredState = getPoweredState(metadataUpdate);
     renderPartyPage(metadataUpdate);
     renderPoweredPage();
@@ -147,7 +149,7 @@ async function loadPartyPage(preloadedMetadata) {
 
   try {
   const players = cachedPlayers;
-  const metadata = preloadedMetadata ?? await OBR.room.getMetadata();
+  const metadata = preloadedMetadata ?? cachedMetadata ?? await OBR.room.getMetadata();
 
   const sheets = players
     .map(player => ({ player, data: metadata[`kob-sheet-${player.id}`] }))
@@ -217,7 +219,7 @@ async function loadPlayerSheetView(preloadedMetadata) {
 
   try {
   const players = cachedPlayers;
-  const metadata = preloadedMetadata ?? await OBR.room.getMetadata();
+  const metadata = preloadedMetadata ?? cachedMetadata ?? await OBR.room.getMetadata();
 
   const player = players.find(item => item.id === selectedPlayerId);
   const data = metadata[`kob-sheet-${selectedPlayerId}`];
@@ -280,8 +282,8 @@ async function loadPlayerSheetView(preloadedMetadata) {
 
   setupGMStrengthExpandListeners(container);
   } catch (err) {
-    container.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Could not load character sheet.</div>`;
-    console.error("loadPlayerSheetView error:", err);
+    container.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Could not load character sheet: ${err?.message || err}</div>`;
+    console.error("loadPlayerSheetView error:", err, err?.stack);
   }
 }
 
