@@ -264,7 +264,7 @@ select.fsel option { direction: ltr; }
 .light .si { border-color: var(--pr); }
 .dark  .si { border-color: var(--dr); }
 
-.sn { font-size: 10px; }
+.sn { font-size: 12px; font-weight: 500; }
 .light .sn { color: var(--pkm); }
 .dark  .sn { color: var(--dkm); }
 
