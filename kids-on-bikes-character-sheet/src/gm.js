@@ -43,12 +43,22 @@ let editingPowerId = null;
 let editingPowers = false;
 let selectedPlayerId = null;
 let gmTheme = "light";
+let cachedPlayers = [];
 
 export async function initGM(app) {
   appRoot = app;
-  const metadata = await OBR.room.getMetadata();
+  const [metadata, players] = await Promise.all([
+    OBR.room.getMetadata(),
+    OBR.party.getPlayers(),
+  ]);
+  cachedPlayers = players;
   poweredState = getPoweredState(metadata);
-  renderGMApp();
+  renderGMApp(metadata);
+
+  OBR.party.onChange(updatedPlayers => {
+    cachedPlayers = updatedPlayers;
+    renderPartyPage();
+  });
 
   OBR.room.onMetadataChange(metadataUpdate => {
     poweredState = getPoweredState(metadataUpdate);
@@ -57,7 +67,7 @@ export async function initGM(app) {
   });
 }
 
-function renderGMApp() {
+function renderGMApp(initialMetadata) {
   appRoot.innerHTML = `
     <div class="${gmTheme}">
       <div class="book-header">
@@ -84,7 +94,7 @@ function renderGMApp() {
   });
 
   setupTabListeners();
-  renderPartyPage();
+  renderPartyPage(initialMetadata);
   renderPoweredPage();
 }
 
@@ -136,10 +146,8 @@ async function loadPartyPage(preloadedMetadata) {
   if (!list) return;
 
   try {
-  const [players, metadata] = await Promise.all([
-    OBR.party.getPlayers(),
-    preloadedMetadata ? Promise.resolve(preloadedMetadata) : OBR.room.getMetadata(),
-  ]);
+  const players = cachedPlayers;
+  const metadata = preloadedMetadata ?? await OBR.room.getMetadata();
 
   const sheets = players
     .map(player => ({ player, data: metadata[`kob-sheet-${player.id}`] }))
@@ -208,10 +216,8 @@ async function loadPlayerSheetView(preloadedMetadata) {
   if (!container || !selectedPlayerId) return;
 
   try {
-  const [players, metadata] = await Promise.all([
-    OBR.party.getPlayers(),
-    preloadedMetadata ? Promise.resolve(preloadedMetadata) : OBR.room.getMetadata(),
-  ]);
+  const players = cachedPlayers;
+  const metadata = preloadedMetadata ?? await OBR.room.getMetadata();
 
   const player = players.find(item => item.id === selectedPlayerId);
   const data = metadata[`kob-sheet-${selectedPlayerId}`];
