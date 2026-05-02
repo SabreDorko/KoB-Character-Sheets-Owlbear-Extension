@@ -36,6 +36,25 @@ const TROPES = [
   { id: "young-provider", label: "Young Provider", ages: ["teen"], stats: { brains: "d8", brawn: "d12", charm: "d10", fight: "d6", flight: "d4", grit: "d20" } },
 ];
 
+const STRENGTHS = [
+  { id: "cool-under-pressure",  label: "Cool Under Pressure", desc: "May spend 1 Adversity Token to take half of your die's value instead of rolling on a Snap Decision.", ageGrant: [] },
+  { id: "easygoing",            label: "Easygoing",           desc: "Gain 2 Adversity Tokens when you fail, instead of 1.",  ageGrant: [] },
+  { id: "gross",                label: "Gross",               desc: "You have some kind of gross bodily trick (loud, quiet, smelly... up to you) that you can do on command.",ageGrant: [] },
+  { id: "heroic",               label: "Heroic",              desc: "You do not need the GM's permission to spend Adversity Tokens to ignore fears.",      ageGrant: [] },
+  { id: "intuitive",            label: "Intuitive",           desc: "May spend 1 Adversity Token to ask the GM about your surroundings, an NPC, or the like. The GM must answer honestly.", ageGrant: [] },
+  { id: "loyal",                label: "Loyal",               desc: "Each of the Adversity Tokens you spend to help your friends gives them a +2 instead of a +1.",     ageGrant: [] },
+  { id: "lucky",                label: "Lucky",               desc: "May spend 2 Adversity Tokens to reroll a stat check.", ageGrant: [] },
+  { id: "prepared",             label: "Prepared",            desc: "May spend 2 Adversity Tokens to just happen to have one commonplace item with you (GM's discretion).", ageGrant: [] },
+  { id: "protective",           label: "Protective",          desc: "Add +3 to rolls when defending one of your friends.",      ageGrant: [] },
+  { id: "quick-healing",        label: "Quick Healing",       desc: "You recover from injuries more quickly, and don't suffer lasting effects from most injuries.",      ageGrant: ["child"] },
+  { id: "rebellious",           label: "Rebellious",          desc: "Add +3 to rolls when persuading or resisting persuasion from children. Add +3 to rolls when resisting persuasion from adults.",      ageGrant: ["teen"] },
+  { id: "skilled-at-___",       label: "Skilled at ___",      desc: "Choose a skill (GM's discretion). You are assumed to succeed when making even moderately difficult checks (9 or less) involving this skill. If the GM determines that you do need to roll for a more difficult check, add up to +3 to your roll.",      ageGrant: ["adult"] },
+  { id: "tough",                label: "Tough",               desc: "If you lose a combat roll, add +3 to the negative number. You still lose the roll no matter what, but could reduce your loss to -1.",      ageGrant: [] },
+  { id: "treasure-hunter",      label: "Treasure Hunter",     desc: "May spend 1 Adversity Token to find a useful item in your surroundings.",      ageGrant: [] },
+  { id: "unassuming",           label: "Unassuming",          desc: "May spend 2 Adversity Tokens to not be seen, within reason (GM's discretion).",      ageGrant: [] },
+  { id: "wealthy",              label: "Wealthy",             desc: "May spend money as though you were in a higher age bracket. For example, a wealthy child is considered to have the disposable income of a typical teen, and a wealthy teen is considered to have the disposable income of a typical adult. A wealthy adult is considered to not have to worry too much about money — they would certainly be able to buy anything they need, and likely able to spend their way out of a lot of situations.",      ageGrant: [] },
+];
+
 let appRoot = null;
 let poweredState = emptyPoweredState();
 let saveTimeout = null;
