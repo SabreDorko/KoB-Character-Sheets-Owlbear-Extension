@@ -53,12 +53,13 @@ export async function initGM(app) {
     OBR.party.getPlayers(),
   ]);
   cachedPlayers = players;
+  cachedMetadata = metadata;
   poweredState = getPoweredState(metadata);
   renderGMApp(metadata);
 
   OBR.party.onChange(updatedPlayers => {
     cachedPlayers = updatedPlayers;
-    renderPartyPage();
+    renderPartyPage(cachedMetadata);
   });
 
   OBR.room.onMetadataChange(metadataUpdate => {
@@ -127,7 +128,7 @@ function renderPartyPage(preloadedMetadata) {
     `;
     document.getElementById("btn-party-back").addEventListener("click", () => {
       selectedPlayerId = null;
-      renderPartyPage();
+      renderPartyPage(cachedMetadata);
     });
     loadPlayerSheetView(preloadedMetadata);
     return;
@@ -194,7 +195,7 @@ async function loadPartyPage(preloadedMetadata) {
     button.addEventListener("click", event => {
       event.stopPropagation();
       selectedPlayerId = button.dataset.viewPlayer;
-      renderPartyPage();
+      renderPartyPage(cachedMetadata);
     });
   });
 
