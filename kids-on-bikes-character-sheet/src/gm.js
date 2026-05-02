@@ -52,7 +52,7 @@ export async function initGM(app) {
 
   OBR.room.onMetadataChange(metadataUpdate => {
     poweredState = getPoweredState(metadataUpdate);
-    renderPartyPage();
+    renderPartyPage(metadataUpdate);
     renderPoweredPage();
   });
 }
@@ -99,7 +99,7 @@ function setupTabListeners() {
   });
 }
 
-function renderPartyPage() {
+function renderPartyPage(preloadedMetadata) {
   const page = document.getElementById("page-party");
   if (!page) return;
 
@@ -117,7 +117,7 @@ function renderPartyPage() {
       selectedPlayerId = null;
       renderPartyPage();
     });
-    loadPlayerSheetView();
+    loadPlayerSheetView(preloadedMetadata);
     return;
   }
 
@@ -128,16 +128,17 @@ function renderPartyPage() {
     </div>
   `;
 
-  loadPartyPage();
+  loadPartyPage(preloadedMetadata);
 }
 
-async function loadPartyPage() {
+async function loadPartyPage(preloadedMetadata) {
   const list = document.getElementById("party-list");
   if (!list) return;
 
+  try {
   const [players, metadata] = await Promise.all([
     OBR.party.getPlayers(),
-    OBR.room.getMetadata(),
+    preloadedMetadata ? Promise.resolve(preloadedMetadata) : OBR.room.getMetadata(),
   ]);
 
   const sheets = players
@@ -195,15 +196,21 @@ async function loadPartyPage() {
       chevron.classList.toggle("open");
     });
   });
+  } catch (err) {
+    const list = document.getElementById("party-list");
+    if (list) list.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Could not load party data.</div>`;
+    console.error("loadPartyPage error:", err);
+  }
 }
 
-async function loadPlayerSheetView() {
+async function loadPlayerSheetView(preloadedMetadata) {
   const container = document.getElementById("party-player-view");
   if (!container || !selectedPlayerId) return;
 
+  try {
   const [players, metadata] = await Promise.all([
     OBR.party.getPlayers(),
-    OBR.room.getMetadata(),
+    preloadedMetadata ? Promise.resolve(preloadedMetadata) : OBR.room.getMetadata(),
   ]);
 
   const player = players.find(item => item.id === selectedPlayerId);
@@ -266,6 +273,10 @@ async function loadPlayerSheetView() {
   `;
 
   setupGMStrengthExpandListeners(container);
+  } catch (err) {
+    container.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Could not load character sheet.</div>`;
+    console.error("loadPlayerSheetView error:", err);
+  }
 }
 
 function renderPoweredPage() {

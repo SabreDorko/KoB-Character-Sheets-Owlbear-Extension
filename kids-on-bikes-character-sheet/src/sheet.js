@@ -96,9 +96,9 @@ export async function initSheet(app) {
 
   if (!metadataListenerBound) {
     metadataListenerBound = true;
-    OBR.room.onMetadataChange(() => {
-      renderPartyPage();
-      renderPoweredPage();
+    OBR.room.onMetadataChange((metadataUpdate) => {
+      renderPartyPage(metadataUpdate);
+      renderPoweredPage(metadataUpdate);
     });
   }
 }
@@ -592,16 +592,18 @@ function renderInventoryPage() {
 
 // ─── PARTY PAGE ───────────────────────────────────────────────────
 
-function renderPartyPage() {
+function renderPartyPage(preloadedMetadata) {
   const page = document.getElementById("page-party");
+  if (!page) return;
   page.innerHTML = `<div class="sh">Party</div><div id="party-list"><div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Loading…</div></div>`;
-  loadParty();
+  loadParty(preloadedMetadata);
 }
 
-async function loadParty() {
+async function loadParty(preloadedMetadata) {
+  try {
   const [players, metadata] = await Promise.all([
     OBR.party.getPlayers(),
-    OBR.room.getMetadata(),
+    preloadedMetadata ? Promise.resolve(preloadedMetadata) : OBR.room.getMetadata(),
   ]);
   const list = document.getElementById("party-list");
   if (!list) return;
@@ -652,11 +654,16 @@ async function loadParty() {
       chevron.classList.toggle("open");
     });
   });
+  } catch (err) {
+    const list = document.getElementById("party-list");
+    if (list) list.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Could not load party data.</div>`;
+    console.error("loadParty error:", err);
+  }
 }
 
 // ─── POWERED CHARACTER PAGE ───────────────────────────────────────
 
-function renderPoweredPage() {
+function renderPoweredPage(preloadedMetadata) {
   const page = document.getElementById("page-powered");
   if (!page) return;
 
@@ -669,14 +676,14 @@ function renderPoweredPage() {
     </div>
   `;
 
-  loadPoweredPage();
+  loadPoweredPage(preloadedMetadata);
 }
 
-async function loadPoweredPage() {
+async function loadPoweredPage(preloadedMetadata) {
   const container = document.getElementById("powered-content");
   if (!container) return;
 
-  const metadata = await OBR.room.getMetadata();
+  const metadata = preloadedMetadata ?? await OBR.room.getMetadata();
   const powered = getPoweredState(metadata);
 
   if (!hasPoweredContent(powered)) {
