@@ -12,21 +12,33 @@ const AGE_BONUSES = {
 
 const TROPES = [
   { id: "custom",                   label: "Custom",                 ages: ["child","teen","adult"], stats: {} },
-  { id: "blue-collar-worker",       label: "Blue-Collar Worker",     ages: ["adult"],                stats: { brains:"d6",  brawn:"d20", charm:"d8",  fight:"d12", flight:"d4",  grit:"d10" } },
+  { id: "adventurous-scout",        label: "Adventurous Scout",      ages: ["child","teen"],         stats: { brains:"d20", brawn:"d12", charm:"d8",  fight:"d4",  flight:"d6",  grit:"d10" } },
+  { id: "animal-lover",             label: "Animal Lover",           ages: ["child","teen"],         stats: { brains:"d6",  brawn:"d12", charm:"d10", fight:"d20", flight:"d8",  grit:"d4"  } },
+  { id: "aspiring-wannabe",         label: "Aspiring Wannabe",       ages: ["teen"],                 stats: { brains:"d6",  brawn:"d4",  charm:"d10", fight:"d8",  flight:"d20", grit:"d12" } },
+  { id: "blue-collar-worker",       label: "Blue-Collar Worker",     ages: ["adult"],                stats: { brains:"d8",  brawn:"d20", charm:"d6",  fight:"d4",  flight:"d12", grit:"d10" } },
   { id: "brilliant-mathlete",       label: "Brilliant Mathlete",     ages: ["child","teen"],         stats: { brains:"d20", brawn:"d4",  charm:"d8",  fight:"d6",  flight:"d12", grit:"d10" } },
   { id: "brutish-jock",             label: "Brutish Jock",           ages: ["teen"],                 stats: { brains:"d4",  brawn:"d20", charm:"d6",  fight:"d12", flight:"d8",  grit:"d10" } },
   { id: "bully",                    label: "Bully",                  ages: ["child","teen"],         stats: { brains:"d6",  brawn:"d12", charm:"d4",  fight:"d20", flight:"d10", grit:"d8"  } },
-  { id: "conspiracy-theorist",      label: "Conspiracy Theorist",    ages: ["teen","adult"],         stats: { brains:"d20", brawn:"d4",  charm:"d6",  fight:"d12", flight:"d10", grit:"d8"  } },
-  { id: "funny-sidekick",           label: "Funny Sidekick",         ages: ["child","teen"],         stats: { brains:"d8",  brawn:"d12", charm:"d20", fight:"d4",  flight:"d10", grit:"d6"  } },
-  { id: "laid-back-slacker",        label: "Laid-Back Slacker",      ages: ["teen","adult"],         stats: { brains:"d10", brawn:"d6",  charm:"d12", fight:"d4",  flight:"d20", grit:"d8"  } },
+  { id: "conspiracy-theorist",      label: "Conspiracy Theorist",    ages: ["teen","adult"],         stats: { brains:"d20", brawn:"d6",  charm:"d4",  fight:"d12", flight:"d10", grit:"d8"  } },
+  { id: "cunning-detective",        label: "Cunning Detective",      ages: ["child","teen","adult"], stats: { brains:"d20", brawn:"d6",  charm:"d12", fight:"d8",  flight:"d4",  grit:"d10" } },
+  { id: "daring-athlete",           label: "Daring Athlete",         ages: ["teen"],                 stats: { brains:"d4",  brawn:"d20", charm:"d6",  fight:"d8",  flight:"d12", grit:"d10" } },
+  { id: "dedicated-farmer",         label: "Dedicated Farmer",       ages: ["child","teen","adult"], stats: { brains:"d6",  brawn:"d20", charm:"d4",  fight:"d10", flight:"d8",  grit:"d12" } },
+  { id: "freakazoid",               label: "freakazoid",             ages: ["child","teen"],         stats: { brains:"d4",  brawn:"d10", charm:"d8",  fight:"d12", flight:"d20", grit:"d6"  } },
+  { id: "funny-sidekick",           label: "Funny Sidekick",         ages: ["child","teen"],         stats: { brains:"d4",  brawn:"d12", charm:"d20", fight:"d6",  flight:"d10", grit:"d8"  } },
+  { id: "goody-goody",              label: "Goody Goody",            ages: ["child","teen"],         stats: { brains:"d10", brawn:"d8",  charm:"d12", fight:"d4",  flight:"d20", grit:"d6"  } },
+  { id: "laid-back-slacker",        label: "Laid-Back Slacker",      ages: ["teen","adult"],         stats: { brains:"d4",  brawn:"d20", charm:"d12", fight:"d8",  flight:"d10", grit:"d6"  } },
   { id: "loner-weirdo",             label: "Loner Weirdo",           ages: ["child","teen"],         stats: { brains:"d8",  brawn:"d10", charm:"d4",  fight:"d12", flight:"d6",  grit:"d20" } },
+  { id: "mysterious-transfer",      label: "Mysterious Transfer",    ages: ["child","teen"],         stats: { brains:"d10", brawn:"d6",  charm:"d4",  fight:"d20", flight:"d12", grit:"d8"  } },
+  { id: "overeager-enthusiast",     label: "Overeager Enthusiast",   ages: ["child","teen","adult"], stats: { brains:"d12", brawn:"d8",  charm:"d20", fight:"d6",  flight:"d4",  grit:"d10" } },
   { id: "overprotective-parent",    label: "Overprotective Parent",  ages: ["adult"],                stats: { brains:"d12", brawn:"d10", charm:"d8",  fight:"d20", flight:"d6",  grit:"d4"  } },
   { id: "plastic-beauty",           label: "Plastic Beauty",         ages: ["teen"],                 stats: { brains:"d8",  brawn:"d6",  charm:"d20", fight:"d10", flight:"d12", grit:"d4"  } },
   { id: "popular-kid",              label: "Popular Kid",            ages: ["child","teen"],         stats: { brains:"d10", brawn:"d6",  charm:"d20", fight:"d4",  flight:"d12", grit:"d8"  } },
+  { id: "prom-royalty",             label: "Prom Royalty",           ages: ["teen"],                 stats: { brains:"d6",  brawn:"d4",  charm:"d20", fight:"d10", flight:"d8",  grit:"d4"  } },
   { id: "reclusive-eccentric",      label: "Reclusive Eccentric",    ages: ["adult"],                stats: { brains:"d12", brawn:"d8",  charm:"d4",  fight:"d6",  flight:"d20", grit:"d10" } },
-  { id: "scout",                    label: "Scout",                  ages: ["child","teen"],         stats: { brains:"d20", brawn:"d8",  charm:"d10", fight:"d4",  flight:"d6",  grit:"d12" } },
+  { id: "silver-spoon",             label: "Silver Spoon",           ages: ["child","teen"],         stats: { brains:"d12", brawn:"d6",  charm:"d8",  fight:"d10", flight:"d20", grit:"d4"  } },
+  { id: "seasoned-babysitter",      label: "Seasoned Babysitter",    ages: ["teen"],                 stats: { brains:"d8",  brawn:"d4",  charm:"d12", fight:"d6",  flight:"d10", grit:"d20" } },
   { id: "stoic-professional",       label: "Stoic Professional",     ages: ["adult"],                stats: { brains:"d12", brawn:"d8",  charm:"d10", fight:"d4",  flight:"d6",  grit:"d20" } },
-  { id: "wannabe",                  label: "Wannabe",                ages: ["teen"],                 stats: { brains:"d12", brawn:"d6",  charm:"d10", fight:"d4",  flight:"d20", grit:"d8"  } },
+  { id: "unlikely-ally",            label: "Unlikely Ally",          ages: ["teen","adult"],         stats: { brains:"d20", brawn:"d10", charm:"d6",  fight:"d20", flight:"d4",  grit:"d12" } },
   { id: "young-provider",           label: "Young Provider",         ages: ["teen"],                 stats: { brains:"d8",  brawn:"d12", charm:"d10", fight:"d6",  flight:"d4",  grit:"d20" } },
 ];
 
@@ -74,7 +86,6 @@ let activeNoteId = null;
 let noteView = "list";
 
 let metadataListenerBound = false;
-let partyPollInterval = null;
 
 let saveTimeout = null;
 function scheduleSave() {
@@ -152,7 +163,6 @@ function renderApp(app) {
   renderPoweredPage();
   setupTabListeners(app);
   setupThemeToggle(app);
-  setupPartyPolling();
 }
 
 function setupTabListeners(app) {
@@ -167,15 +177,6 @@ function setupTabListeners(app) {
       }
     });
   });
-}
-
-function setupPartyPolling() {
-  clearInterval(partyPollInterval);
-  partyPollInterval = setInterval(() => {
-    const partyPage = document.querySelector(".page[data-page='party']");
-    if (!partyPage?.classList.contains("active")) return;
-    renderPartyPage();
-  }, 5000);
 }
 
 function setupThemeToggle(app) {
@@ -212,22 +213,24 @@ function renderCharacterPage() {
       ${ageSelect()}
     </div>
     <div class="sh">Stats</div>
-    <div class="sgrid">
+    <table class="stats-table" aria-label="Character stats">
+      <tbody>
       ${STATS.map(s => {
         const usedDice = Object.entries(state.stats)
           .filter(([stat, die]) => die && stat !== s)
           .map(([_, die]) => die);
         const availableDice = DIES.filter(d => !usedDice.includes(d));
         return `
-        <div class="si">
-          <span class="sn">${cap(s)}${bonused.includes(s) ? `<span class="sb">+1</span>` : ""}</span>
-          <select class="sdie" id="stat-${s}">
+        <tr class="stats-row">
+          <th scope="row" class="stats-name"><span class="sn">${cap(s)}${bonused.includes(s) ? `<span class="sb">+1</span>` : ""}</span></th>
+          <td class="stats-value"><select class="sdie" id="stat-${s}">
             <option value="">—</option>
             ${availableDice.map(d => `<option value="${d}" ${state.stats[s] === d ? "selected" : ""}>${d}</option>`).join("")}
-          </select>
-        </div>
+          </select></td>
+        </tr>
       `}).join("")}
-    </div>
+      </tbody>
+    </table>
     <div class="sh">Adversity Tokens</div>
     <div class="ctr">
       <div class="cb" id="tok-minus">−</div>
@@ -671,14 +674,17 @@ function renderNotesPage() {
       <div class="notes-list" id="notes-list">
         ${orderedNotes.length
           ? orderedNotes.map(note => `
-            <button class="note-item ${note.id === activeNoteId ? "active" : ""}" data-note-open="${note.id}" type="button">
-              <span class="note-item-title">${esc(note.title?.trim() || "Untitled Note")}</span>
-              <span class="note-item-preview">${esc(note.content?.trim() || "No content yet")}</span>
-            </button>
+            <div class="note-item ${note.id === activeNoteId ? "active" : ""}">
+              <button class="note-open-btn" data-note-open="${note.id}" type="button">
+                <span class="note-item-title">${esc(note.title?.trim() || "Untitled Note")}</span>
+                <span class="note-item-preview">${esc(note.content?.trim() || "No content yet")}</span>
+              </button>
+              <button class="str-remove note-quick-delete" data-note-delete="${note.id}" type="button" aria-label="Delete note">&times;</button>
+            </div>
           `).join("")
-          : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Create your first note.</div>`}
+          : `<div class="notes-helper-row">Create your first note.</div>`}
       </div>
-      <div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:48px;align-items:center;">Open a note to edit it.</div>
+      <div class="notes-helper-row notes-helper-two-lines">Open a note to edit it.</div>
     </div>
   `;
 
@@ -709,6 +715,22 @@ function setupNotesListeners() {
     button.addEventListener("click", () => {
       activeNoteId = button.dataset.noteOpen;
       noteView = "detail";
+      renderNotesPage();
+    });
+  });
+
+  document.querySelectorAll("[data-note-delete]").forEach(button => {
+    button.addEventListener("click", () => {
+      const noteId = button.dataset.noteDelete;
+      const index = state.notes.findIndex(entry => entry.id === noteId);
+      if (index === -1) return;
+      state.notes.splice(index, 1);
+      if (activeNoteId === noteId) {
+        const next = state.notes[index] || state.notes[index - 1] || null;
+        activeNoteId = next ? next.id : null;
+      }
+      noteView = "list";
+      saveNow();
       renderNotesPage();
     });
   });
@@ -873,17 +895,19 @@ async function loadPoweredPage(preloadedMetadata) {
     <div class="powered-field"><span class="pe-label">Trope</span><span>${esc(tropeLabel(powered.trope, powered.tropeName))}</span></div>
     <div class="powered-field"><span class="pe-label">Age</span><span>${cap(powered.age || "—")}</span></div>
     <div class="sh">Stats</div>
-    <div class="sgrid">
+    <table class="stats-table" aria-label="Powered character stats">
+      <tbody>
       ${(() => {
         const bonused = AGE_BONUSES[powered.age] || [];
         return STATS.map(stat => `
-        <div class="si">
-          <span class="sn">${cap(stat)}${bonused.includes(stat) ? `<span class="sb">+1</span>` : ""}</span>
-          <span class="sd">${formatStatDie(powered.stats?.[stat], bonused.includes(stat))}</span>
-        </div>
+        <tr class="stats-row">
+          <th scope="row" class="stats-name"><span class="sn">${cap(stat)}${bonused.includes(stat) ? `<span class="sb">+1</span>` : ""}</span></th>
+          <td class="stats-value"><span class="sd">${formatStatDie(powered.stats?.[stat], bonused.includes(stat))}</span></td>
+        </tr>
       `).join("");
       })()}
-    </div>
+      </tbody>
+    </table>
     <div class="sh">Psychic Energy</div>
     <div class="pe-row">
       <span class="pe-label">Current Capacity</span>

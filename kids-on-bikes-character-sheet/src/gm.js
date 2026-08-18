@@ -69,7 +69,6 @@ let cachedMetadata = {};
 let gmNotes = [];
 let activeGMNoteId = null;
 let gmNoteView = "list";
-let gmPartyPollInterval = null;
 
 export async function initGM(app) {
   appRoot = app;
@@ -130,7 +129,6 @@ function renderGMApp(initialMetadata) {
   renderPartyPage(initialMetadata);
   renderPoweredPage();
   renderGMNotesPage();
-  setupGMPartyPolling();
 }
 
 function setupTabListeners() {
@@ -145,15 +143,6 @@ function setupTabListeners() {
       }
     });
   });
-}
-
-function setupGMPartyPolling() {
-  clearInterval(gmPartyPollInterval);
-  gmPartyPollInterval = setInterval(() => {
-    const partyPage = document.querySelector(".page[data-page='party']");
-    if (!partyPage?.classList.contains("active")) return;
-    refreshGMPartyPage();
-  }, 5000);
 }
 
 async function refreshGMPartyPage() {
@@ -487,14 +476,17 @@ function renderGMNotesPage() {
       <div class="notes-list">
         ${orderedNotes.length
           ? orderedNotes.map(note => `
-            <button class="note-item ${note.id === activeGMNoteId ? "active" : ""}" data-gm-note-open="${note.id}" type="button">
-              <span class="note-item-title">${esc(note.title?.trim() || "Untitled Note")}</span>
-              <span class="note-item-preview">${esc(note.content?.trim() || "No content yet")}</span>
-            </button>
+            <div class="note-item ${note.id === activeGMNoteId ? "active" : ""}">
+              <button class="note-open-btn" data-gm-note-open="${note.id}" type="button">
+                <span class="note-item-title">${esc(note.title?.trim() || "Untitled Note")}</span>
+                <span class="note-item-preview">${esc(note.content?.trim() || "No content yet")}</span>
+              </button>
+              <button class="str-remove note-quick-delete" data-gm-note-delete="${note.id}" type="button" aria-label="Delete note">&times;</button>
+            </div>
           `).join("")
-          : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Create your first note.</div>`}
+          : `<div class="notes-helper-row">Create your first note.</div>`}
       </div>
-      <div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:48px;align-items:center;">Open a note to edit it.</div>
+      <div class="notes-helper-row notes-helper-two-lines">Open a note to edit it.</div>
     </div>
   `;
 
@@ -525,6 +517,22 @@ function setupGMNotesListeners() {
     button.addEventListener("click", () => {
       activeGMNoteId = button.dataset.gmNoteOpen;
       gmNoteView = "detail";
+      renderGMNotesPage();
+    });
+  });
+
+  document.querySelectorAll("[data-gm-note-delete]").forEach(button => {
+    button.addEventListener("click", () => {
+      const noteId = button.dataset.gmNoteDelete;
+      const index = gmNotes.findIndex(entry => entry.id === noteId);
+      if (index === -1) return;
+      gmNotes.splice(index, 1);
+      if (activeGMNoteId === noteId) {
+        const next = gmNotes[index] || gmNotes[index - 1] || null;
+        activeGMNoteId = next ? next.id : null;
+      }
+      gmNoteView = "list";
+      saveGMNotesNow();
       renderGMNotesPage();
     });
   });
