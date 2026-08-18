@@ -506,10 +506,20 @@ input.inv-input {
   gap: 8px;
 }
 
+.note-title-input {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
 .note-content-input {
-  min-height: 220px;
-  font-size: 13px;
-  line-height: 1.45;
+  min-height: 312px;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 24px;
+  border: none;
+  border-radius: 0;
+  resize: none;
 }
 
 .notes-actions {
@@ -537,6 +547,28 @@ input.inv-input {
 .dark .note-item.active {
   border-color: var(--da);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--da) 45%, transparent);
+}
+
+.light .note-content-input {
+  color: var(--pk);
+  background-color: transparent;
+  background-image: repeating-linear-gradient(transparent, transparent 23px, var(--pr) 23px, var(--pr) 24px);
+}
+
+.dark .note-content-input {
+  color: var(--dk);
+  background-color: transparent;
+  background-image: repeating-linear-gradient(transparent, transparent 23px, var(--dr) 23px, var(--dr) 24px);
+}
+
+.light .note-content-input::placeholder,
+.light .note-title-input::placeholder {
+  color: var(--pkf);
+}
+
+.dark .note-content-input::placeholder,
+.dark .note-title-input::placeholder {
+  color: var(--dkf);
 }
 
 /* PARTY LIST */

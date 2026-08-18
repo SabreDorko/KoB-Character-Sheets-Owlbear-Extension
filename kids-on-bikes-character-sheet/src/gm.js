@@ -68,6 +68,8 @@ let cachedPlayers = [];
 let cachedMetadata = {};
 let gmNotes = [];
 let activeGMNoteId = null;
+let gmNoteView = "list";
+let gmPartyPollInterval = null;
 
 export async function initGM(app) {
   appRoot = app;
@@ -128,6 +130,7 @@ function renderGMApp(initialMetadata) {
   renderPartyPage(initialMetadata);
   renderPoweredPage();
   renderGMNotesPage();
+  setupGMPartyPolling();
 }
 
 function setupTabListeners() {
@@ -137,8 +140,35 @@ function setupTabListeners() {
       appRoot.querySelectorAll(".page").forEach(node => node.classList.remove("active"));
       tab.classList.add("active");
       appRoot.querySelector(`[data-page="${tab.dataset.tab}"]`).classList.add("active");
+      if (tab.dataset.tab === "party") {
+        refreshGMPartyPage();
+      }
     });
   });
+}
+
+function setupGMPartyPolling() {
+  clearInterval(gmPartyPollInterval);
+  gmPartyPollInterval = setInterval(() => {
+    const partyPage = document.querySelector(".page[data-page='party']");
+    if (!partyPage?.classList.contains("active")) return;
+    refreshGMPartyPage();
+  }, 5000);
+}
+
+async function refreshGMPartyPage() {
+  const [players, metadata] = await Promise.all([
+    OBR.party.getPlayers(),
+    OBR.room.getMetadata(),
+  ]);
+  cachedPlayers = players;
+  cachedMetadata = metadata;
+
+  if (selectedPlayerId && !players.some(player => player.id === selectedPlayerId)) {
+    selectedPlayerId = null;
+  }
+
+  renderPartyPage(metadata);
 }
 
 function renderPartyPage(preloadedMetadata) {
@@ -422,6 +452,32 @@ function renderGMNotesPage() {
   const activeNote = gmNotes.find(note => note.id === activeGMNoteId) || null;
   const orderedNotes = [...gmNotes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
+  if (!activeNote) {
+    gmNoteView = "list";
+  }
+
+  if (gmNoteView === "detail" && activeNote) {
+    page.innerHTML = `
+      <div class="sh">
+        <button class="str-add-btn" id="gm-note-back-btn" type="button">Back</button>
+        <span>GM Note</span>
+        <button class="str-add-btn" id="gm-note-add-btn" type="button">New Note</button>
+      </div>
+      <div class="notes-wrap">
+        <div class="notes-editor">
+          <input class="power-input note-title-input" id="gm-note-title-input" type="text" value="${esc(activeNote.title)}" placeholder="Note title" />
+          <textarea class="power-input power-textarea note-content-input" id="gm-note-content-input" placeholder="Write your note...">${esc(activeNote.content)}</textarea>
+          <div class="notes-actions">
+            <button class="str-remove" id="gm-note-delete-btn" type="button" aria-label="Delete note">&times;</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    setupGMNotesListeners();
+    return;
+  }
+
   page.innerHTML = `
     <div class="sh">
       <span>GM Notes</span>
@@ -438,15 +494,7 @@ function renderGMNotesPage() {
           `).join("")
           : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Create your first note.</div>`}
       </div>
-      <div class="notes-editor">
-        ${activeNote ? `
-          <input class="power-input" id="gm-note-title-input" type="text" value="${esc(activeNote.title)}" placeholder="Note title" />
-          <textarea class="power-input power-textarea note-content-input" id="gm-note-content-input" placeholder="Write your note...">${esc(activeNote.content)}</textarea>
-          <div class="notes-actions">
-            <button class="str-remove" id="gm-note-delete-btn" type="button" aria-label="Delete note">&times;</button>
-          </div>
-        ` : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:120px;align-items:center;">Select a note or create one.</div>`}
-      </div>
+      <div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:48px;align-items:center;">Open a note to edit it.</div>
     </div>
   `;
 
@@ -463,13 +511,20 @@ function setupGMNotesListeners() {
     };
     gmNotes.unshift(newNote);
     activeGMNoteId = newNote.id;
+    gmNoteView = "detail";
     scheduleGMNotesSave();
+    renderGMNotesPage();
+  });
+
+  document.getElementById("gm-note-back-btn")?.addEventListener("click", () => {
+    gmNoteView = "list";
     renderGMNotesPage();
   });
 
   document.querySelectorAll("[data-gm-note-open]").forEach(button => {
     button.addEventListener("click", () => {
       activeGMNoteId = button.dataset.gmNoteOpen;
+      gmNoteView = "detail";
       renderGMNotesPage();
     });
   });
@@ -480,11 +535,10 @@ function setupGMNotesListeners() {
     note.title = event.target.value;
     note.updatedAt = Date.now();
     scheduleGMNotesSave();
+  });
 
-    const activeItemTitle = document.querySelector(".note-item.active .note-item-title");
-    if (activeItemTitle) {
-      activeItemTitle.textContent = note.title.trim() || "Untitled Note";
-    }
+  document.getElementById("gm-note-title-input")?.addEventListener("blur", () => {
+    saveGMNotesNow();
   });
 
   document.getElementById("gm-note-content-input")?.addEventListener("input", event => {
@@ -495,13 +549,18 @@ function setupGMNotesListeners() {
     scheduleGMNotesSave();
   });
 
+  document.getElementById("gm-note-content-input")?.addEventListener("blur", () => {
+    saveGMNotesNow();
+  });
+
   document.getElementById("gm-note-delete-btn")?.addEventListener("click", () => {
     const index = gmNotes.findIndex(entry => entry.id === activeGMNoteId);
     if (index === -1) return;
     gmNotes.splice(index, 1);
     const next = gmNotes[index] || gmNotes[index - 1] || null;
     activeGMNoteId = next ? next.id : null;
-    scheduleGMNotesSave();
+    gmNoteView = activeGMNoteId ? "detail" : "list";
+    saveGMNotesNow();
     renderGMNotesPage();
   });
 }
@@ -665,6 +724,11 @@ function schedulePoweredSave() {
 function scheduleGMNotesSave() {
   clearTimeout(notesSaveTimeout);
   notesSaveTimeout = setTimeout(saveGMNotes, 300);
+}
+
+async function saveGMNotesNow() {
+  clearTimeout(notesSaveTimeout);
+  await saveGMNotes();
 }
 
 async function savePowered() {

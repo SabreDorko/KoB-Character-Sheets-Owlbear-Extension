@@ -71,8 +71,10 @@ let state = {
 
 let strengthEditor = emptyStrengthEditor();
 let activeNoteId = null;
+let noteView = "list";
 
 let metadataListenerBound = false;
+let partyPollInterval = null;
 
 let saveTimeout = null;
 function scheduleSave() {
@@ -83,6 +85,11 @@ function scheduleSave() {
 async function save() {
   const playerId = await OBR.player.getId();
   await OBR.room.setMetadata({ [`kob-sheet-${playerId}`]: state });
+}
+
+async function saveNow() {
+  clearTimeout(saveTimeout);
+  await save();
 }
 
 async function load() {
@@ -145,6 +152,7 @@ function renderApp(app) {
   renderPoweredPage();
   setupTabListeners(app);
   setupThemeToggle(app);
+  setupPartyPolling();
 }
 
 function setupTabListeners(app) {
@@ -154,8 +162,20 @@ function setupTabListeners(app) {
       app.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
       tab.classList.add("active");
       app.querySelector(`[data-page="${tab.dataset.tab}"]`).classList.add("active");
+      if (tab.dataset.tab === "party") {
+        renderPartyPage();
+      }
     });
   });
+}
+
+function setupPartyPolling() {
+  clearInterval(partyPollInterval);
+  partyPollInterval = setInterval(() => {
+    const partyPage = document.querySelector(".page[data-page='party']");
+    if (!partyPage?.classList.contains("active")) return;
+    renderPartyPage();
+  }, 5000);
 }
 
 function setupThemeToggle(app) {
@@ -616,6 +636,32 @@ function renderNotesPage() {
   const activeNote = state.notes.find(note => note.id === activeNoteId) || null;
   const orderedNotes = [...state.notes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
+  if (!activeNote) {
+    noteView = "list";
+  }
+
+  if (noteView === "detail" && activeNote) {
+    page.innerHTML = `
+      <div class="sh">
+        <button class="str-add-btn" id="note-back-btn" type="button">Back</button>
+        <span>Note</span>
+        <button class="str-add-btn" id="note-add-btn" type="button">New Note</button>
+      </div>
+      <div class="notes-wrap">
+        <div class="notes-editor">
+          <input class="power-input note-title-input" id="note-title-input" type="text" value="${esc(activeNote.title)}" placeholder="Note title" />
+          <textarea class="power-input power-textarea note-content-input" id="note-content-input" placeholder="Write your note...">${esc(activeNote.content)}</textarea>
+          <div class="notes-actions">
+            <button class="str-remove" id="note-delete-btn" type="button" aria-label="Delete note">&times;</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    setupNotesListeners();
+    return;
+  }
+
   page.innerHTML = `
     <div class="sh">
       <span>Notes</span>
@@ -632,15 +678,7 @@ function renderNotesPage() {
           `).join("")
           : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Create your first note.</div>`}
       </div>
-      <div class="notes-editor">
-        ${activeNote ? `
-          <input class="power-input" id="note-title-input" type="text" value="${esc(activeNote.title)}" placeholder="Note title" />
-          <textarea class="power-input power-textarea note-content-input" id="note-content-input" placeholder="Write your note...">${esc(activeNote.content)}</textarea>
-          <div class="notes-actions">
-            <button class="str-remove" id="note-delete-btn" type="button" aria-label="Delete note">&times;</button>
-          </div>
-        ` : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:120px;align-items:center;">Select a note or create one.</div>`}
-      </div>
+      <div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:48px;align-items:center;">Open a note to edit it.</div>
     </div>
   `;
 
@@ -657,13 +695,20 @@ function setupNotesListeners() {
     };
     state.notes.unshift(newNote);
     activeNoteId = newNote.id;
+    noteView = "detail";
     scheduleSave();
+    renderNotesPage();
+  });
+
+  document.getElementById("note-back-btn")?.addEventListener("click", () => {
+    noteView = "list";
     renderNotesPage();
   });
 
   document.querySelectorAll("[data-note-open]").forEach(button => {
     button.addEventListener("click", () => {
       activeNoteId = button.dataset.noteOpen;
+      noteView = "detail";
       renderNotesPage();
     });
   });
@@ -674,11 +719,10 @@ function setupNotesListeners() {
     note.title = event.target.value;
     note.updatedAt = Date.now();
     scheduleSave();
+  });
 
-    const activeItemTitle = document.querySelector(".note-item.active .note-item-title");
-    if (activeItemTitle) {
-      activeItemTitle.textContent = note.title.trim() || "Untitled Note";
-    }
+  document.getElementById("note-title-input")?.addEventListener("blur", () => {
+    saveNow();
   });
 
   document.getElementById("note-content-input")?.addEventListener("input", event => {
@@ -689,13 +733,18 @@ function setupNotesListeners() {
     scheduleSave();
   });
 
+  document.getElementById("note-content-input")?.addEventListener("blur", () => {
+    saveNow();
+  });
+
   document.getElementById("note-delete-btn")?.addEventListener("click", () => {
     const index = state.notes.findIndex(entry => entry.id === activeNoteId);
     if (index === -1) return;
     state.notes.splice(index, 1);
     const next = state.notes[index] || state.notes[index - 1] || null;
     activeNoteId = next ? next.id : null;
-    scheduleSave();
+    noteView = activeNoteId ? "detail" : "list";
+    saveNow();
     renderNotesPage();
   });
 }
