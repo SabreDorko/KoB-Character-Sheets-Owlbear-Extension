@@ -960,9 +960,6 @@ function renderPowersList(powers) {
       <div class="power-header">
         <span>${esc(power.title) || "Untitled Power"}</span>
         <div class="power-header-actions">
-          ${power.cost !== "" && power.cost !== null && power.cost !== undefined
-            ? `<span class="power-cost">${esc(String(power.cost))} PE</span>`
-            : ""}
           <button class="icon-btn power-expand" data-power-expand="${power.id}">
             <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="6,2 2,5 6,8"/>

@@ -405,7 +405,6 @@ function renderPoweredPage() {
       <input class="power-input" id="inp-power-title" type="text" value="${esc(editingPower?.title || "")}" placeholder="Power title" />
       <textarea class="power-input power-textarea" id="inp-power-desc" placeholder="Power description">${esc(editingPower?.description || "")}</textarea>
       <div class="power-form-row">
-        <input class="power-input" id="inp-power-cost" type="number" min="0" value="${esc(editingPower?.cost === "" || editingPower?.cost === null || editingPower?.cost === undefined ? "" : String(editingPower.cost))}" placeholder="Psychic Energy cost (optional)" />
         <div class="power-form-actions">
           <button class="str-add-btn" id="btn-power-add">${editingPower ? "Save Power" : "Add Power"}</button>
           ${editingPower ? `<button class="str-add-btn" id="btn-power-cancel" type="button">Cancel</button>` : ""}
@@ -686,17 +685,15 @@ function setupPoweredListeners() {
   document.getElementById("btn-power-add")?.addEventListener("click", () => {
     const titleInput = document.getElementById("inp-power-title");
     const descriptionInput = document.getElementById("inp-power-desc");
-    const costInput = document.getElementById("inp-power-cost");
     const title = titleInput.value.trim();
     const description = descriptionInput.value.trim();
-    const cost = normalizeNumberInput(costInput.value);
 
     if (!title || !description) return;
 
     if (editingPowerId) {
       poweredState.powers = poweredState.powers.map(power => (
         power.id === editingPowerId
-          ? { ...power, title, description, cost }
+          ? { ...power, title, description }
           : power
       ));
       editingPowerId = null;
@@ -705,7 +702,6 @@ function setupPoweredListeners() {
         id: createId(),
         title,
         description,
-        cost,
       });
     }
 
@@ -772,9 +768,6 @@ function renderPowersList(powers, editable = false) {
       <div class="power-header">
         <span>${esc(power.title) || "Untitled Power"}</span>
         <div class="power-header-actions">
-          ${power.cost !== "" && power.cost !== null && power.cost !== undefined
-            ? `<span class="power-cost">${esc(String(power.cost))} PE</span>`
-            : ""}
           ${editable ? `<button class="str-add-btn" data-powered-power-edit="${power.id}" type="button">Edit</button>` : ""}
           ${editable ? `<button class="str-remove" data-powered-power-remove="${power.id}">&times;</button>` : ""}
           <button class="icon-btn power-expand" data-power-expand="${power.id}">
@@ -863,9 +856,19 @@ function emptyPoweredState() {
 function getPoweredState(metadata) {
   const base = emptyPoweredState();
   const saved = metadata[POWERED_KEY] || {};
+  const powers = Array.isArray(saved.powers)
+    ? saved.powers
+        .filter(power => power && typeof power === "object")
+        .map(power => ({
+          id: typeof power.id === "string" && power.id ? power.id : createId(),
+          title: typeof power.title === "string" ? power.title : "",
+          description: typeof power.description === "string" ? power.description : "",
+        }))
+    : [];
   return {
     ...base,
     ...saved,
+    powers,
     stats: { ...base.stats, ...(saved.stats || {}) },
   };
 }
