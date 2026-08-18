@@ -3,6 +3,7 @@ import OBR from "@owlbear-rodeo/sdk";
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
 const POWERED_KEY = "kob-powered-sheet";
+const GM_NOTES_KEY = "kob-gm-notes";
 
 const AGE_BONUSES = {
   child: ["charm", "flight"],
@@ -58,12 +59,15 @@ const STRENGTHS = [
 let appRoot = null;
 let poweredState = emptyPoweredState();
 let saveTimeout = null;
+let notesSaveTimeout = null;
 let editingPowerId = null;
 let editingPowers = false;
 let selectedPlayerId = null;
 let gmTheme = "light";
 let cachedPlayers = [];
 let cachedMetadata = {};
+let gmNotes = [];
+let activeGMNoteId = null;
 
 export async function initGM(app) {
   appRoot = app;
@@ -74,6 +78,7 @@ export async function initGM(app) {
   cachedPlayers = players;
   cachedMetadata = metadata;
   poweredState = getPoweredState(metadata);
+  gmNotes = getGMNotes(metadata);
   renderGMApp(metadata);
 
   OBR.party.onChange(updatedPlayers => {
@@ -84,8 +89,10 @@ export async function initGM(app) {
   OBR.room.onMetadataChange(metadataUpdate => {
     cachedMetadata = metadataUpdate;
     poweredState = getPoweredState(metadataUpdate);
+    gmNotes = getGMNotes(metadataUpdate);
     renderPartyPage(metadataUpdate);
     renderPoweredPage();
+    renderGMNotesPage();
   });
 }
 
@@ -104,20 +111,23 @@ function renderGMApp(initialMetadata) {
       <div class="top-tabs">
         <div class="top-tab active" data-tab="party">Party</div>
         <div class="top-tab" data-tab="powered">Powered Character</div>
+        <div class="top-tab" data-tab="notes">GM Notes</div>
       </div>
       <div class="page active" data-page="party" id="page-party"></div>
       <div class="page" data-page="powered" id="page-powered"></div>
+      <div class="page" data-page="notes" id="page-notes"></div>
     </div>
   `;
 
   document.getElementById("gm-theme-tog").addEventListener("click", () => {
     gmTheme = gmTheme === "light" ? "dark" : "light";
-    renderGMApp();
+    renderGMApp(cachedMetadata);
   });
 
   setupTabListeners();
   renderPartyPage(initialMetadata);
   renderPoweredPage();
+  renderGMNotesPage();
 }
 
 function setupTabListeners() {
@@ -399,6 +409,103 @@ function renderPoweredPage() {
   setupPoweredListeners();
 }
 
+function renderGMNotesPage() {
+  const page = document.getElementById("page-notes");
+  if (!page) return;
+
+  if (!gmNotes.length) {
+    activeGMNoteId = null;
+  } else if (!gmNotes.some(note => note.id === activeGMNoteId)) {
+    activeGMNoteId = gmNotes[0].id;
+  }
+
+  const activeNote = gmNotes.find(note => note.id === activeGMNoteId) || null;
+  const orderedNotes = [...gmNotes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  page.innerHTML = `
+    <div class="sh">
+      <span>GM Notes</span>
+      <button class="str-add-btn" id="gm-note-add-btn" type="button">New Note</button>
+    </div>
+    <div class="notes-wrap">
+      <div class="notes-list">
+        ${orderedNotes.length
+          ? orderedNotes.map(note => `
+            <button class="note-item ${note.id === activeGMNoteId ? "active" : ""}" data-gm-note-open="${note.id}" type="button">
+              <span class="note-item-title">${esc(note.title?.trim() || "Untitled Note")}</span>
+              <span class="note-item-preview">${esc(note.content?.trim() || "No content yet")}</span>
+            </button>
+          `).join("")
+          : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Create your first note.</div>`}
+      </div>
+      <div class="notes-editor">
+        ${activeNote ? `
+          <input class="power-input" id="gm-note-title-input" type="text" value="${esc(activeNote.title)}" placeholder="Note title" />
+          <textarea class="power-input power-textarea note-content-input" id="gm-note-content-input" placeholder="Write your note...">${esc(activeNote.content)}</textarea>
+          <div class="notes-actions">
+            <button class="str-remove" id="gm-note-delete-btn" type="button" aria-label="Delete note">&times;</button>
+          </div>
+        ` : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:120px;align-items:center;">Select a note or create one.</div>`}
+      </div>
+    </div>
+  `;
+
+  setupGMNotesListeners();
+}
+
+function setupGMNotesListeners() {
+  document.getElementById("gm-note-add-btn")?.addEventListener("click", () => {
+    const newNote = {
+      id: createId(),
+      title: "",
+      content: "",
+      updatedAt: Date.now(),
+    };
+    gmNotes.unshift(newNote);
+    activeGMNoteId = newNote.id;
+    scheduleGMNotesSave();
+    renderGMNotesPage();
+  });
+
+  document.querySelectorAll("[data-gm-note-open]").forEach(button => {
+    button.addEventListener("click", () => {
+      activeGMNoteId = button.dataset.gmNoteOpen;
+      renderGMNotesPage();
+    });
+  });
+
+  document.getElementById("gm-note-title-input")?.addEventListener("input", event => {
+    const note = gmNotes.find(entry => entry.id === activeGMNoteId);
+    if (!note) return;
+    note.title = event.target.value;
+    note.updatedAt = Date.now();
+    scheduleGMNotesSave();
+
+    const activeItemTitle = document.querySelector(".note-item.active .note-item-title");
+    if (activeItemTitle) {
+      activeItemTitle.textContent = note.title.trim() || "Untitled Note";
+    }
+  });
+
+  document.getElementById("gm-note-content-input")?.addEventListener("input", event => {
+    const note = gmNotes.find(entry => entry.id === activeGMNoteId);
+    if (!note) return;
+    note.content = event.target.value;
+    note.updatedAt = Date.now();
+    scheduleGMNotesSave();
+  });
+
+  document.getElementById("gm-note-delete-btn")?.addEventListener("click", () => {
+    const index = gmNotes.findIndex(entry => entry.id === activeGMNoteId);
+    if (index === -1) return;
+    gmNotes.splice(index, 1);
+    const next = gmNotes[index] || gmNotes[index - 1] || null;
+    activeGMNoteId = next ? next.id : null;
+    scheduleGMNotesSave();
+    renderGMNotesPage();
+  });
+}
+
 function setupPoweredListeners() {
   document.getElementById("inp-powered-name").addEventListener("input", event => {
     poweredState.name = event.target.value;
@@ -555,8 +662,17 @@ function schedulePoweredSave() {
   saveTimeout = setTimeout(savePowered, 300);
 }
 
+function scheduleGMNotesSave() {
+  clearTimeout(notesSaveTimeout);
+  notesSaveTimeout = setTimeout(saveGMNotes, 300);
+}
+
 async function savePowered() {
   await OBR.room.setMetadata({ [POWERED_KEY]: poweredState });
+}
+
+async function saveGMNotes() {
+  await OBR.room.setMetadata({ [GM_NOTES_KEY]: gmNotes });
 }
 
 function renderPowersList(powers, editable = false) {
@@ -665,6 +781,19 @@ function getPoweredState(metadata) {
     ...saved,
     stats: { ...base.stats, ...(saved.stats || {}) },
   };
+}
+
+function getGMNotes(metadata) {
+  const saved = metadata[GM_NOTES_KEY];
+  if (!Array.isArray(saved)) return [];
+  return saved
+    .filter(note => note && typeof note === "object")
+    .map(note => ({
+      id: typeof note.id === "string" && note.id ? note.id : createId(),
+      title: typeof note.title === "string" ? note.title : "",
+      content: typeof note.content === "string" ? note.content : "",
+      updatedAt: Number.isFinite(Number(note.updatedAt)) ? Number(note.updatedAt) : Date.now(),
+    }));
 }
 
 function normalizeNumberInput(value) {

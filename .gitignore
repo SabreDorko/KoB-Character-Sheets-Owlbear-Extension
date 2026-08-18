@@ -1,0 +1,13 @@
+# Workspace-local IDE artifacts
+.vs/
+
+# Copilot local artifacts
+.copilot/
+.vscode/.copilot/
+.vscode/copilot/
+
+# Nested project local artifacts
+**/.vs/
+**/.copilot/
+**/.vscode/.copilot/
+**/.vscode/copilot/

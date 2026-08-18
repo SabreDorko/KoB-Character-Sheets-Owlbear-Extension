@@ -65,10 +65,12 @@ let state = {
   tokens: 0,
   strengths: [],
   inventory: [],
+  notes: [],
   editingStrengths: false,
 };
 
 let strengthEditor = emptyStrengthEditor();
+let activeNoteId = null;
 
 let metadataListenerBound = false;
 
@@ -87,7 +89,13 @@ async function load() {
   const playerId = await OBR.player.getId();
   const metadata = await OBR.room.getMetadata();
   const saved = metadata[`kob-sheet-${playerId}`];
-  if (saved) state = { ...state, ...saved };
+  if (saved) {
+    state = {
+      ...state,
+      ...saved,
+      notes: normalizeNotes(saved.notes),
+    };
+  }
 }
 
 export async function initSheet(app) {
@@ -118,11 +126,13 @@ function renderApp(app) {
       <div class="top-tabs">
         <div class="top-tab active" data-tab="character">Character</div>
         <div class="top-tab" data-tab="inventory">Inventory</div>
+        <div class="top-tab" data-tab="notes">Notes</div>
         <div class="top-tab" data-tab="party">Party</div>
         <div class="top-tab" data-tab="powered">Powered</div>
       </div>
       <div class="page active" data-page="character" id="page-character"></div>
       <div class="page" data-page="inventory" id="page-inventory"></div>
+      <div class="page" data-page="notes" id="page-notes"></div>
       <div class="page" data-page="party" id="page-party"></div>
       <div class="page" data-page="powered" id="page-powered"></div>
     </div>
@@ -130,6 +140,7 @@ function renderApp(app) {
 
   renderCharacterPage();
   renderInventoryPage();
+  renderNotesPage();
   renderPartyPage();
   renderPoweredPage();
   setupTabListeners(app);
@@ -590,6 +601,105 @@ function renderInventoryPage() {
   });
 }
 
+// ─── NOTES PAGE ───────────────────────────────────────────────────
+
+function renderNotesPage() {
+  const page = document.getElementById("page-notes");
+  if (!page) return;
+
+  if (!state.notes.length) {
+    activeNoteId = null;
+  } else if (!state.notes.some(note => note.id === activeNoteId)) {
+    activeNoteId = state.notes[0].id;
+  }
+
+  const activeNote = state.notes.find(note => note.id === activeNoteId) || null;
+  const orderedNotes = [...state.notes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  page.innerHTML = `
+    <div class="sh">
+      <span>Notes</span>
+      <button class="str-add-btn" id="note-add-btn" type="button">New Note</button>
+    </div>
+    <div class="notes-wrap">
+      <div class="notes-list" id="notes-list">
+        ${orderedNotes.length
+          ? orderedNotes.map(note => `
+            <button class="note-item ${note.id === activeNoteId ? "active" : ""}" data-note-open="${note.id}" type="button">
+              <span class="note-item-title">${esc(note.title?.trim() || "Untitled Note")}</span>
+              <span class="note-item-preview">${esc(note.content?.trim() || "No content yet")}</span>
+            </button>
+          `).join("")
+          : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Create your first note.</div>`}
+      </div>
+      <div class="notes-editor">
+        ${activeNote ? `
+          <input class="power-input" id="note-title-input" type="text" value="${esc(activeNote.title)}" placeholder="Note title" />
+          <textarea class="power-input power-textarea note-content-input" id="note-content-input" placeholder="Write your note...">${esc(activeNote.content)}</textarea>
+          <div class="notes-actions">
+            <button class="str-remove" id="note-delete-btn" type="button" aria-label="Delete note">&times;</button>
+          </div>
+        ` : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;height:120px;align-items:center;">Select a note or create one.</div>`}
+      </div>
+    </div>
+  `;
+
+  setupNotesListeners();
+}
+
+function setupNotesListeners() {
+  document.getElementById("note-add-btn")?.addEventListener("click", () => {
+    const newNote = {
+      id: createId(),
+      title: "",
+      content: "",
+      updatedAt: Date.now(),
+    };
+    state.notes.unshift(newNote);
+    activeNoteId = newNote.id;
+    scheduleSave();
+    renderNotesPage();
+  });
+
+  document.querySelectorAll("[data-note-open]").forEach(button => {
+    button.addEventListener("click", () => {
+      activeNoteId = button.dataset.noteOpen;
+      renderNotesPage();
+    });
+  });
+
+  document.getElementById("note-title-input")?.addEventListener("input", event => {
+    const note = state.notes.find(entry => entry.id === activeNoteId);
+    if (!note) return;
+    note.title = event.target.value;
+    note.updatedAt = Date.now();
+    scheduleSave();
+
+    const activeItemTitle = document.querySelector(".note-item.active .note-item-title");
+    if (activeItemTitle) {
+      activeItemTitle.textContent = note.title.trim() || "Untitled Note";
+    }
+  });
+
+  document.getElementById("note-content-input")?.addEventListener("input", event => {
+    const note = state.notes.find(entry => entry.id === activeNoteId);
+    if (!note) return;
+    note.content = event.target.value;
+    note.updatedAt = Date.now();
+    scheduleSave();
+  });
+
+  document.getElementById("note-delete-btn")?.addEventListener("click", () => {
+    const index = state.notes.findIndex(entry => entry.id === activeNoteId);
+    if (index === -1) return;
+    state.notes.splice(index, 1);
+    const next = state.notes[index] || state.notes[index - 1] || null;
+    activeNoteId = next ? next.id : null;
+    scheduleSave();
+    renderNotesPage();
+  });
+}
+
 // ─── PARTY PAGE ───────────────────────────────────────────────────
 
 function renderPartyPage(preloadedMetadata) {
@@ -740,6 +850,22 @@ function cap(str) {
 
 function esc(str) {
   return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function normalizeNotes(notes) {
+  if (!Array.isArray(notes)) return [];
+  return notes
+    .filter(note => note && typeof note === "object")
+    .map(note => ({
+      id: typeof note.id === "string" && note.id ? note.id : createId(),
+      title: typeof note.title === "string" ? note.title : "",
+      content: typeof note.content === "string" ? note.content : "",
+      updatedAt: Number.isFinite(Number(note.updatedAt)) ? Number(note.updatedAt) : Date.now(),
+    }));
+}
+
+function createId() {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function tropeOptionLabel(trope) {
