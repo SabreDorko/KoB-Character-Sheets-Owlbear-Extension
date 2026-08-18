@@ -653,7 +653,7 @@ input.inv-input {
 
 .note-title-input {
   height: var(--note-row-h);
-  padding: 1px 0 0;
+  padding: 0;
   font-size: 12px;
   font-weight: 700;
   line-height: var(--note-row-h);
@@ -664,7 +664,7 @@ input.inv-input {
 
 .note-content-input {
   min-height: 312px;
-  padding: 1px 0 0;
+  padding: 0;
   font-size: 12px;
   line-height: var(--note-row-h);
   border: none;
