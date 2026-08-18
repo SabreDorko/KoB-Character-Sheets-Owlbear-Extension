@@ -7,6 +7,7 @@ const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
 const POWERED_KEY = "kob-powered-sheet";
 const GM_NOTES_KEY = "kob-gm-notes";
+const GM_THEME_KEY = "kob-gm-theme";
 
 const AGE_BONUSES = ageRules.bonuses;
 
@@ -31,6 +32,7 @@ const GM_LOCAL_NOTES_KEY = "kob-gm-local-notes";
 
 export async function initGM(app) {
   appRoot = app;
+  gmTheme = loadGMTheme();
   const [metadata, players] = await Promise.all([
     OBR.room.getMetadata(),
     OBR.party.getPlayers(),
@@ -84,6 +86,7 @@ function renderGMApp(initialMetadata) {
 
   document.getElementById("gm-theme-tog").addEventListener("click", () => {
     gmTheme = gmTheme === "light" ? "dark" : "light";
+    persistGMTheme();
     renderGMApp(cachedMetadata);
   });
 
@@ -899,6 +902,23 @@ function loadLocalGMNotes() {
     return getGMNotes({ [GM_NOTES_KEY]: JSON.parse(raw) });
   } catch {
     return [];
+  }
+}
+
+function loadGMTheme() {
+  try {
+    const stored = localStorage.getItem(GM_THEME_KEY);
+    return stored === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+function persistGMTheme() {
+  try {
+    localStorage.setItem(GM_THEME_KEY, gmTheme);
+  } catch {
+    // Best-effort cache only.
   }
 }
 

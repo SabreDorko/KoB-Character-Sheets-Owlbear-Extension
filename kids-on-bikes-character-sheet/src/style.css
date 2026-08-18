@@ -637,6 +637,8 @@ input.inv-input {
   height: 100%;
   border: none;
   background: transparent;
+  color: inherit;
+  font: inherit;
   text-align: left;
   padding: 0 28px 0 12px;
   cursor: pointer;
