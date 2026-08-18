@@ -631,8 +631,8 @@ function renderNotesPage() {
       </div>
       <div class="notes-wrap">
         <div class="notes-editor">
-          <input class="power-input note-title-input" id="note-title-input" type="text" value="${esc(activeNote.title)}" placeholder="Note title" />
-          <textarea class="power-input power-textarea note-content-input" id="note-content-input" placeholder="Write your note...">${esc(activeNote.content)}</textarea>
+          <input class="note-title-input" id="note-title-input" type="text" value="${esc(activeNote.title)}" placeholder="Note title" />
+          <textarea class="note-content-input" id="note-content-input" placeholder="Write your note...">${esc(activeNote.content)}</textarea>
           <div class="notes-actions">
             <button class="str-remove" id="note-delete-btn" type="button" aria-label="Delete note">&times;</button>
           </div>
