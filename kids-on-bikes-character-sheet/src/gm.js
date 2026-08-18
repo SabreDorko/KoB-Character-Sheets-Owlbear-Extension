@@ -18,6 +18,7 @@ let saveTimeout = null;
 let notesSaveTimeout = null;
 let editingPowerId = null;
 let editingPowers = false;
+let editingPoweredStats = false;
 let selectedPlayerId = null;
 let gmTheme = "light";
 let cachedPlayers = [];
@@ -303,6 +304,8 @@ function renderPoweredPage() {
 
   const editingPower = poweredState.powers.find(power => power.id === editingPowerId) || null;
   const bonused = AGE_BONUSES[poweredState.age] || [];
+  const canEditStats = poweredState.trope === "custom";
+  if (!canEditStats) editingPoweredStats = false;
 
   page.innerHTML = `
     <div class="f">
@@ -323,23 +326,45 @@ function renderPoweredPage() {
       <span class="fl">Age</span>
       ${ageSelect(poweredState)}
     </div>
-    <div class="sh">Stats</div>
-    <div class="sgrid">
-      ${STATS.map(stat => {
-        const usedDice = Object.entries(poweredState.stats)
-          .filter(([s, die]) => die && s !== stat)
-          .map(([_, die]) => die);
-        const availableDice = DIES.filter(d => !usedDice.includes(d));
-        return `
-        <div class="si">
-          <span class="sn">${cap(stat)}${bonused.includes(stat) ? `<span class="sb">+1</span>` : ""}</span>
-          <select class="sdie" id="powered-stat-${stat}">
-            <option value="">-</option>
-            ${availableDice.map(die => `<option value="${die}" ${poweredState.stats[stat] === die ? "selected" : ""}>${die}</option>`).join("")}
-          </select>
-        </div>
-      `}).join("")}
+    <div class="sh">Stats
+      ${canEditStats ? `
+      <button class="icon-btn" id="powered-stats-edit-btn" title="Edit Stats">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8.5 1.5l2 2-7 7H1.5v-2l7-7z"/><line x1="6.5" y1="3.5" x2="8.5" y2="5.5"/>
+        </svg>
+        <span class="tooltip">${editingPoweredStats ? "Done" : "Edit Stats"}</span>
+      </button>` : ""}
     </div>
+    <table class="stats-inline-table" aria-label="GM powered character stats">
+      <thead>
+        <tr class="stats-inline-label-row">
+          ${STATS.map(stat => `<th class="stats-inline-head">${cap(stat)}</th>`).join("")}
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="stats-inline-value-row">
+          ${STATS.map(stat => {
+            const usedDice = Object.entries(poweredState.stats)
+              .filter(([s, die]) => die && s !== stat)
+              .map(([_, die]) => die);
+            const availableDice = DIES.filter(d => !usedDice.includes(d));
+            return `
+            <td class="stats-inline-cell">
+              ${editingPoweredStats
+                ? `<div class="stats-inline-edit">
+                    <select class="sdie" id="powered-stat-${stat}">
+                      <option value="">-</option>
+                      ${availableDice.map(die => `<option value="${die}" ${poweredState.stats[stat] === die ? "selected" : ""}>${die}</option>`).join("")}
+                    </select>
+                    ${bonused.includes(stat) ? `<span class="stats-inline-edit-bonus">+1</span>` : ""}
+                  </div>`
+                : `<span class="sd">${formatStatDie(poweredState.stats?.[stat], bonused.includes(stat))}</span>`}
+            </td>
+          `;
+          }).join("")}
+        </tr>
+      </tbody>
+    </table>
     <div class="sh">Psychic Energy</div>
     <div class="pe-edit-row">
       <div class="pe-edit-fields">
@@ -561,6 +586,7 @@ function setupPoweredListeners() {
 
   document.getElementById("sel-powered-trope").addEventListener("change", event => {
     poweredState.trope = event.target.value;
+    if (poweredState.trope !== "custom") editingPoweredStats = false;
     const trope = TROPES.find(item => item.id === poweredState.trope);
     if (trope && trope.id !== "custom" && Object.keys(trope.stats).length) {
       poweredState.stats = { ...trope.stats };
@@ -592,10 +618,15 @@ function setupPoweredListeners() {
   });
 
   STATS.forEach(stat => {
-    document.getElementById(`powered-stat-${stat}`).addEventListener("change", event => {
+    document.getElementById(`powered-stat-${stat}`)?.addEventListener("change", event => {
       poweredState.stats[stat] = event.target.value;
       schedulePoweredSave();
     });
+  });
+
+  document.getElementById("powered-stats-edit-btn")?.addEventListener("click", () => {
+    editingPoweredStats = !editingPoweredStats;
+    renderPoweredPage();
   });
 
   document.getElementById("inp-powered-pe-current").addEventListener("input", event => {

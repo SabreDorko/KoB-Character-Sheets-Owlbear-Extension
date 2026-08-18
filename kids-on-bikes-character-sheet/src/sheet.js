@@ -29,6 +29,7 @@ let strengthEditor = emptyStrengthEditor();
 let activeNoteId = null;
 let noteView = "list";
 let currentPlayerId = "";
+let editingStats = false;
 
 let metadataListenerBound = false;
 
@@ -164,31 +165,43 @@ function renderCharacterPage() {
       <span class="fl">Age</span>
       ${ageSelect()}
     </div>
-    <div class="sh">Stats</div>
-    <table class="stats-table" aria-label="Character stats">
+    <div class="sh">Stats
+      ${state.trope === "custom" ? `
+      <button class="icon-btn" id="stats-edit-btn" title="Edit Stats">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8.5 1.5l2 2-7 7H1.5v-2l7-7z"/><line x1="6.5" y1="3.5" x2="8.5" y2="5.5"/>
+        </svg>
+        <span class="tooltip">${editingStats ? "Done" : "Edit Stats"}</span>
+      </button>` : ""}
+    </div>
+    <table class="stats-inline-table" aria-label="Character stats">
       <thead>
-        <tr class="stats-head-row">
-          <th class="stats-head">Stat</th>
-          <th class="stats-head stats-head-right">Die</th>
-          <th class="stats-head stats-head-right">Bonus</th>
+        <tr class="stats-inline-label-row">
+          ${STATS.map(stat => `<th class="stats-inline-head">${cap(stat)}</th>`).join("")}
         </tr>
       </thead>
       <tbody>
-      ${STATS.map(s => {
-        const usedDice = Object.entries(state.stats)
-          .filter(([stat, die]) => die && stat !== s)
-          .map(([_, die]) => die);
-        const availableDice = DIES.filter(d => !usedDice.includes(d));
-        return `
-        <tr class="stats-row">
-          <th scope="row" class="stats-name"><span class="sn">${cap(s)}</span></th>
-          <td class="stats-value"><select class="sdie" id="stat-${s}">
-            <option value="">—</option>
-            ${availableDice.map(d => `<option value="${d}" ${state.stats[s] === d ? "selected" : ""}>${d}</option>`).join("")}
-          </select></td>
-          <td class="stats-bonus">${bonused.includes(s) ? "+1" : "—"}</td>
+        <tr class="stats-inline-value-row">
+          ${STATS.map(s => {
+            const usedDice = Object.entries(state.stats)
+              .filter(([stat, die]) => die && stat !== s)
+              .map(([_, die]) => die);
+            const availableDice = DIES.filter(d => !usedDice.includes(d));
+            return `
+            <td class="stats-inline-cell">
+              ${editingStats
+                ? `<div class="stats-inline-edit">
+                    <select class="sdie" id="stat-${s}">
+                      <option value="">—</option>
+                      ${availableDice.map(d => `<option value="${d}" ${state.stats[s] === d ? "selected" : ""}>${d}</option>`).join("")}
+                    </select>
+                    ${bonused.includes(s) ? `<span class="stats-inline-edit-bonus">+1</span>` : ""}
+                  </div>`
+                : `<span class="sd">${formatStatDie(state.stats?.[s], bonused.includes(s))}</span>`}
+            </td>
+          `;
+          }).join("")}
         </tr>
-      `}).join("")}
       </tbody>
     </table>
     <div class="sh">Adversity Tokens</div>
@@ -394,6 +407,7 @@ function setupCharacterListeners() {
 
   document.getElementById("sel-trope").addEventListener("change", e => {
     state.trope = e.target.value;
+    if (state.trope !== "custom") editingStats = false;
     const trope = TROPES.find(t => t.id === state.trope);
     if (trope && trope.id !== "custom" && Object.keys(trope.stats).length) {
       state.stats = { ...trope.stats };
@@ -432,10 +446,15 @@ function setupCharacterListeners() {
   });
 
   STATS.forEach(s => {
-    document.getElementById(`stat-${s}`).addEventListener("change", e => {
+    document.getElementById(`stat-${s}`)?.addEventListener("change", e => {
       state.stats[s] = e.target.value;
       scheduleSave();
     });
+  });
+
+  document.getElementById("stats-edit-btn")?.addEventListener("click", () => {
+    editingStats = !editingStats;
+    renderCharacterPage();
   });
 
   document.getElementById("tok-plus").addEventListener("click", () => {
@@ -860,25 +879,21 @@ async function loadPoweredPage(preloadedMetadata) {
     <div class="powered-field"><span class="pe-label">Trope</span><span>${esc(tropeLabel(powered.trope, powered.tropeName))}</span></div>
     <div class="powered-field"><span class="pe-label">Age</span><span>${cap(powered.age || "—")}</span></div>
     <div class="sh">Stats</div>
-    <table class="stats-table" aria-label="Powered character stats">
+    <table class="stats-inline-table" aria-label="Powered character stats">
       <thead>
-        <tr class="stats-head-row">
-          <th class="stats-head">Stat</th>
-          <th class="stats-head stats-head-right">Die</th>
-          <th class="stats-head stats-head-right">Bonus</th>
+        <tr class="stats-inline-label-row">
+          ${STATS.map(stat => `<th class="stats-inline-head">${cap(stat)}</th>`).join("")}
         </tr>
       </thead>
       <tbody>
-      ${(() => {
-        const bonused = AGE_BONUSES[powered.age] || [];
-        return STATS.map(stat => `
-        <tr class="stats-row">
-          <th scope="row" class="stats-name"><span class="sn">${cap(stat)}</span></th>
-          <td class="stats-value"><span class="sd">${formatStatDie(powered.stats?.[stat], false)}</span></td>
-          <td class="stats-bonus">${bonused.includes(stat) ? "+1" : "—"}</td>
+        <tr class="stats-inline-value-row">
+          ${(() => {
+            const bonused = AGE_BONUSES[powered.age] || [];
+            return STATS.map(stat => `
+            <td class="stats-inline-cell"><span class="sd">${formatStatDie(powered.stats?.[stat], bonused.includes(stat))}</span></td>
+          `).join("");
+          })()}
         </tr>
-      `).join("");
-      })()}
       </tbody>
     </table>
     <div class="sh">Psychic Energy</div>
