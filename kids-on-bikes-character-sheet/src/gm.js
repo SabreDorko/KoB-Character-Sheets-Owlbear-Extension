@@ -537,6 +537,13 @@ function setupGMNotesListeners() {
     scheduleGMNotesSave();
   });
 
+  document.getElementById("gm-note-title-input")?.addEventListener("keydown", event => {
+    if (event.key === "Tab" && !event.shiftKey) {
+      event.preventDefault();
+      document.getElementById("gm-note-content-input")?.focus();
+    }
+  });
+
   document.getElementById("gm-note-title-input")?.addEventListener("blur", () => {
     saveGMNotesNow();
   });
@@ -547,6 +554,13 @@ function setupGMNotesListeners() {
     note.content = event.target.value;
     note.updatedAt = Date.now();
     scheduleGMNotesSave();
+  });
+
+  document.getElementById("gm-note-content-input")?.addEventListener("keydown", event => {
+    if (event.key === "Tab" && event.shiftKey) {
+      event.preventDefault();
+      document.getElementById("gm-note-title-input")?.focus();
+    }
   });
 
   document.getElementById("gm-note-content-input")?.addEventListener("blur", () => {

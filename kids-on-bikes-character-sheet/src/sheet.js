@@ -721,6 +721,13 @@ function setupNotesListeners() {
     scheduleSave();
   });
 
+  document.getElementById("note-title-input")?.addEventListener("keydown", event => {
+    if (event.key === "Tab" && !event.shiftKey) {
+      event.preventDefault();
+      document.getElementById("note-content-input")?.focus();
+    }
+  });
+
   document.getElementById("note-title-input")?.addEventListener("blur", () => {
     saveNow();
   });
@@ -731,6 +738,13 @@ function setupNotesListeners() {
     note.content = event.target.value;
     note.updatedAt = Date.now();
     scheduleSave();
+  });
+
+  document.getElementById("note-content-input")?.addEventListener("keydown", event => {
+    if (event.key === "Tab" && event.shiftKey) {
+      event.preventDefault();
+      document.getElementById("note-title-input")?.focus();
+    }
   });
 
   document.getElementById("note-content-input")?.addEventListener("blur", () => {

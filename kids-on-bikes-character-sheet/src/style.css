@@ -462,8 +462,8 @@ input.inv-input {
 .notes-wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 6px;
+  gap: 0;
+  padding-top: 0;
 }
 
 .notes-list {
@@ -471,50 +471,59 @@ input.inv-input {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-right: 2px;
+  gap: 0;
+  padding-right: 0;
 }
 
 .note-item {
-  border: 0.5px solid;
-  border-radius: 6px;
+  border: none;
+  border-radius: 0;
   background: transparent;
   text-align: left;
-  padding: 7px 8px;
+  padding: 0 8px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  justify-content: center;
+  gap: 0;
+  height: 48px;
 }
 
 .note-item-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 24px;
 }
 
 .note-item-preview {
   font-size: 11px;
   opacity: 0.8;
-  line-height: 1.35;
-  max-height: 2.7em;
+  line-height: 24px;
+  max-height: 24px;
   overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .notes-editor {
   display: grid;
-  gap: 8px;
+  gap: 0;
 }
 
 .note-title-input {
   height: 24px;
-  padding: 0 8px;
+  padding: 0;
   font-size: 12px;
+  font-weight: 700;
+  line-height: 24px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .note-content-input {
   min-height: 312px;
-  padding: 0 8px;
+  padding: 0;
   font-size: 12px;
   line-height: 24px;
   border: none;
@@ -525,40 +534,36 @@ input.inv-input {
 .notes-actions {
   display: flex;
   justify-content: flex-end;
+  height: 24px;
+  align-items: center;
 }
 
 .light .note-item {
-  border-color: var(--pr);
   color: var(--pk);
-  background: color-mix(in srgb, var(--pl) 92%, var(--pm));
 }
 
 .dark .note-item {
-  border-color: var(--dr);
   color: var(--dk);
-  background: color-mix(in srgb, var(--dl) 88%, var(--dm));
 }
 
 .light .note-item.active {
-  border-color: var(--pa);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pa) 40%, transparent);
+  color: var(--pa);
 }
 
 .dark .note-item.active {
-  border-color: var(--da);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--da) 45%, transparent);
+  color: var(--da);
 }
 
 .light .note-content-input {
   color: var(--pk);
   background-color: transparent;
-  background-image: repeating-linear-gradient(transparent, transparent 23px, var(--pr) 23px, var(--pr) 24px);
+  background-image: none;
 }
 
 .dark .note-content-input {
   color: var(--dk);
   background-color: transparent;
-  background-image: repeating-linear-gradient(transparent, transparent 23px, var(--dr) 23px, var(--dr) 24px);
+  background-image: none;
 }
 
 .light .note-content-input::placeholder,
