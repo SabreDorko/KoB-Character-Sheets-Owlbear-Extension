@@ -1,0 +1,12 @@
+{
+  "bonuses": {
+    "child": ["charm", "flight"],
+    "teen": ["brawn", "fight"],
+    "adult": ["brains", "grit"]
+  },
+  "granted": {
+    "child": ["quick-healing"],
+    "teen": ["rebellious"],
+    "adult": ["skilled-at-___"]
+  }
+}
