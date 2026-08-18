@@ -723,7 +723,7 @@ input.inv-input {
 }
 
 .dark .note-item {
-  color: var(--dk);
+  color: #fff;
   border-color: var(--dr);
 }
 
@@ -732,7 +732,7 @@ input.inv-input {
 }
 
 .dark .note-item.active {
-  color: var(--da);
+  color: #fff;
 }
 
 .light .notes-helper-row {
@@ -741,7 +741,7 @@ input.inv-input {
 }
 
 .dark .notes-helper-row {
-  color: var(--dkm);
+  color: #fff;
   border-color: var(--dr);
 }
 
@@ -752,9 +752,13 @@ input.inv-input {
 }
 
 .dark .note-content-input {
-  color: var(--dk);
+  color: #fff;
   background-color: transparent;
   background-image: none;
+}
+
+.dark .note-title-input {
+  color: #fff;
 }
 
 .light .note-content-input::placeholder,
@@ -764,7 +768,7 @@ input.inv-input {
 
 .dark .note-content-input::placeholder,
 .dark .note-title-input::placeholder {
-  color: var(--dkf);
+  color: rgba(255, 255, 255, 0.65);
 }
 
 /* PARTY LIST */
