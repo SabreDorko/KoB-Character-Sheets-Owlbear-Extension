@@ -1,60 +1,16 @@
 import OBR from "@owlbear-rodeo/sdk";
+import TROPES from "./data/tropes.json";
+import STRENGTHS from "./data/strengths.json";
+import ageRules from "./data/age-rules.json";
 
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
 const POWERED_KEY = "kob-powered-sheet";
 const GM_NOTES_KEY = "kob-gm-notes";
 
-const AGE_BONUSES = {
-  child: ["charm", "flight"],
-  teen: ["brawn", "fight"],
-  adult: ["brains", "grit"],
-};
+const AGE_BONUSES = ageRules.bonuses;
 
-const AGE_GRANTED = {
-  child: ["quick-healing"],
-  teen: ["rebellious"],
-  adult: ["skilled-at-___"],
-};
-
-const TROPES = [
-  { id: "custom", label: "Custom", ages: ["child", "teen", "adult"], stats: {} },
-  { id: "blue-collar-worker", label: "Blue-Collar Worker", ages: ["adult"], stats: { brains: "d6", brawn: "d20", charm: "d8", fight: "d12", flight: "d4", grit: "d10" } },
-  { id: "brilliant-mathlete", label: "Brilliant Mathlete", ages: ["child", "teen"], stats: { brains: "d20", brawn: "d4", charm: "d8", fight: "d6", flight: "d12", grit: "d10" } },
-  { id: "brutish-jock", label: "Brutish Jock", ages: ["teen"], stats: { brains: "d4", brawn: "d20", charm: "d6", fight: "d12", flight: "d8", grit: "d10" } },
-  { id: "bully", label: "Bully", ages: ["child", "teen"], stats: { brains: "d6", brawn: "d12", charm: "d4", fight: "d20", flight: "d10", grit: "d8" } },
-  { id: "conspiracy-theorist", label: "Conspiracy Theorist", ages: ["teen", "adult"], stats: { brains: "d20", brawn: "d4", charm: "d6", fight: "d12", flight: "d10", grit: "d8" } },
-  { id: "funny-sidekick", label: "Funny Sidekick", ages: ["child", "teen"], stats: { brains: "d8", brawn: "d12", charm: "d20", fight: "d4", flight: "d10", grit: "d6" } },
-  { id: "laid-back-slacker", label: "Laid-Back Slacker", ages: ["teen", "adult"], stats: { brains: "d10", brawn: "d6", charm: "d12", fight: "d4", flight: "d20", grit: "d8" } },
-  { id: "loner-weirdo", label: "Loner Weirdo", ages: ["child", "teen"], stats: { brains: "d8", brawn: "d10", charm: "d4", fight: "d12", flight: "d6", grit: "d20" } },
-  { id: "overprotective-parent", label: "Overprotective Parent", ages: ["adult"], stats: { brains: "d12", brawn: "d10", charm: "d8", fight: "d20", flight: "d6", grit: "d4" } },
-  { id: "plastic-beauty", label: "Plastic Beauty", ages: ["teen"], stats: { brains: "d8", brawn: "d6", charm: "d20", fight: "d10", flight: "d12", grit: "d4" } },
-  { id: "popular-kid", label: "Popular Kid", ages: ["child", "teen"], stats: { brains: "d10", brawn: "d6", charm: "d20", fight: "d4", flight: "d12", grit: "d8" } },
-  { id: "reclusive-eccentric", label: "Reclusive Eccentric", ages: ["adult"], stats: { brains: "d12", brawn: "d8", charm: "d4", fight: "d6", flight: "d20", grit: "d10" } },
-  { id: "scout", label: "Scout", ages: ["child", "teen"], stats: { brains: "d20", brawn: "d8", charm: "d10", fight: "d4", flight: "d6", grit: "d12" } },
-  { id: "stoic-professional", label: "Stoic Professional", ages: ["adult"], stats: { brains: "d12", brawn: "d8", charm: "d10", fight: "d4", flight: "d6", grit: "d20" } },
-  { id: "wannabe", label: "Wannabe", ages: ["teen"], stats: { brains: "d12", brawn: "d6", charm: "d10", fight: "d4", flight: "d20", grit: "d8" } },
-  { id: "young-provider", label: "Young Provider", ages: ["teen"], stats: { brains: "d8", brawn: "d12", charm: "d10", fight: "d6", flight: "d4", grit: "d20" } },
-];
-
-const STRENGTHS = [
-  { id: "cool-under-pressure",  label: "Cool Under Pressure", desc: "May spend 1 Adversity Token to take half of your die's value instead of rolling on a Snap Decision.", ageGrant: [] },
-  { id: "easygoing",            label: "Easygoing",           desc: "Gain 2 Adversity Tokens when you fail, instead of 1.",  ageGrant: [] },
-  { id: "gross",                label: "Gross",               desc: "You have some kind of gross bodily trick (loud, quiet, smelly... up to you) that you can do on command.",ageGrant: [] },
-  { id: "heroic",               label: "Heroic",              desc: "You do not need the GM's permission to spend Adversity Tokens to ignore fears.",      ageGrant: [] },
-  { id: "intuitive",            label: "Intuitive",           desc: "May spend 1 Adversity Token to ask the GM about your surroundings, an NPC, or the like. The GM must answer honestly.", ageGrant: [] },
-  { id: "loyal",                label: "Loyal",               desc: "Each of the Adversity Tokens you spend to help your friends gives them a +2 instead of a +1.",     ageGrant: [] },
-  { id: "lucky",                label: "Lucky",               desc: "May spend 2 Adversity Tokens to reroll a stat check.", ageGrant: [] },
-  { id: "prepared",             label: "Prepared",            desc: "May spend 2 Adversity Tokens to just happen to have one commonplace item with you (GM's discretion).", ageGrant: [] },
-  { id: "protective",           label: "Protective",          desc: "Add +3 to rolls when defending one of your friends.",      ageGrant: [] },
-  { id: "quick-healing",        label: "Quick Healing",       desc: "You recover from injuries more quickly, and don't suffer lasting effects from most injuries.",      ageGrant: ["child"] },
-  { id: "rebellious",           label: "Rebellious",          desc: "Add +3 to rolls when persuading or resisting persuasion from children. Add +3 to rolls when resisting persuasion from adults.",      ageGrant: ["teen"] },
-  { id: "skilled-at-___",       label: "Skilled at ___",      desc: "Choose a skill (GM's discretion). You are assumed to succeed when making even moderately difficult checks (9 or less) involving this skill. If the GM determines that you do need to roll for a more difficult check, add up to +3 to your roll.",      ageGrant: ["adult"] },
-  { id: "tough",                label: "Tough",               desc: "If you lose a combat roll, add +3 to the negative number. You still lose the roll no matter what, but could reduce your loss to -1.",      ageGrant: [] },
-  { id: "treasure-hunter",      label: "Treasure Hunter",     desc: "May spend 1 Adversity Token to find a useful item in your surroundings.",      ageGrant: [] },
-  { id: "unassuming",           label: "Unassuming",          desc: "May spend 2 Adversity Tokens to not be seen, within reason (GM's discretion).",      ageGrant: [] },
-  { id: "wealthy",              label: "Wealthy",             desc: "May spend money as though you were in a higher age bracket. For example, a wealthy child is considered to have the disposable income of a typical teen, and a wealthy teen is considered to have the disposable income of a typical adult. A wealthy adult is considered to not have to worry too much about money — they would certainly be able to buy anything they need, and likely able to spend their way out of a lot of situations.",      ageGrant: [] },
-];
+const AGE_GRANTED = ageRules.granted;
 
 let appRoot = null;
 let poweredState = emptyPoweredState();
@@ -70,6 +26,8 @@ let gmNotes = [];
 let activeGMNoteId = null;
 let gmNoteView = "list";
 
+const GM_LOCAL_NOTES_KEY = "kob-gm-local-notes";
+
 export async function initGM(app) {
   appRoot = app;
   const [metadata, players] = await Promise.all([
@@ -79,7 +37,8 @@ export async function initGM(app) {
   cachedPlayers = players;
   cachedMetadata = metadata;
   poweredState = getPoweredState(metadata);
-  gmNotes = getGMNotes(metadata);
+  gmNotes = mergeGMNotesByNewest(getGMNotes(metadata), loadLocalGMNotes());
+  persistLocalGMNotes();
   renderGMApp(metadata);
 
   OBR.party.onChange(updatedPlayers => {
@@ -91,6 +50,8 @@ export async function initGM(app) {
     cachedMetadata = metadataUpdate;
     poweredState = getPoweredState(metadataUpdate);
     gmNotes = getGMNotes(metadataUpdate);
+    gmNotes = mergeGMNotesByNewest(gmNotes, loadLocalGMNotes());
+    persistLocalGMNotes();
     renderPartyPage(metadataUpdate);
     renderPoweredPage();
     renderGMNotesPage();
@@ -504,6 +465,7 @@ function setupGMNotesListeners() {
     gmNotes.unshift(newNote);
     activeGMNoteId = newNote.id;
     gmNoteView = "detail";
+    persistLocalGMNotes();
     scheduleGMNotesSave();
     renderGMNotesPage();
   });
@@ -532,6 +494,7 @@ function setupGMNotesListeners() {
         activeGMNoteId = next ? next.id : null;
       }
       gmNoteView = "list";
+      persistLocalGMNotes();
       saveGMNotesNow();
       renderGMNotesPage();
     });
@@ -542,6 +505,7 @@ function setupGMNotesListeners() {
     if (!note) return;
     note.title = event.target.value;
     note.updatedAt = Date.now();
+    persistLocalGMNotes();
     scheduleGMNotesSave();
   });
 
@@ -561,6 +525,7 @@ function setupGMNotesListeners() {
     if (!note) return;
     note.content = event.target.value;
     note.updatedAt = Date.now();
+    persistLocalGMNotes();
     scheduleGMNotesSave();
   });
 
@@ -582,6 +547,7 @@ function setupGMNotesListeners() {
     const next = gmNotes[index] || gmNotes[index - 1] || null;
     activeGMNoteId = next ? next.id : null;
     gmNoteView = activeGMNoteId ? "detail" : "list";
+    persistLocalGMNotes();
     saveGMNotesNow();
     renderGMNotesPage();
   });
@@ -758,6 +724,7 @@ async function savePowered() {
 }
 
 async function saveGMNotes() {
+  persistLocalGMNotes();
   await OBR.room.setMetadata({ [GM_NOTES_KEY]: gmNotes });
 }
 
@@ -880,6 +847,36 @@ function getGMNotes(metadata) {
       content: typeof note.content === "string" ? note.content : "",
       updatedAt: Number.isFinite(Number(note.updatedAt)) ? Number(note.updatedAt) : Date.now(),
     }));
+}
+
+function mergeGMNotesByNewest(primary, secondary) {
+  const byId = new Map();
+  [...primary, ...secondary].forEach(note => {
+    if (!note?.id) return;
+    const existing = byId.get(note.id);
+    if (!existing || (note.updatedAt || 0) >= (existing.updatedAt || 0)) {
+      byId.set(note.id, note);
+    }
+  });
+  return [...byId.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+function loadLocalGMNotes() {
+  try {
+    const raw = localStorage.getItem(GM_LOCAL_NOTES_KEY);
+    if (!raw) return [];
+    return getGMNotes({ [GM_NOTES_KEY]: JSON.parse(raw) });
+  } catch {
+    return [];
+  }
+}
+
+function persistLocalGMNotes() {
+  try {
+    localStorage.setItem(GM_LOCAL_NOTES_KEY, JSON.stringify(gmNotes));
+  } catch {
+    // Best-effort cache only.
+  }
 }
 
 function normalizeNumberInput(value) {
