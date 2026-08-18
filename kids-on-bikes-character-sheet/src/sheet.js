@@ -166,6 +166,13 @@ function renderCharacterPage() {
     </div>
     <div class="sh">Stats</div>
     <table class="stats-table" aria-label="Character stats">
+      <thead>
+        <tr class="stats-head-row">
+          <th class="stats-head">Stat</th>
+          <th class="stats-head stats-head-right">Die</th>
+          <th class="stats-head stats-head-right">Bonus</th>
+        </tr>
+      </thead>
       <tbody>
       ${STATS.map(s => {
         const usedDice = Object.entries(state.stats)
@@ -174,11 +181,12 @@ function renderCharacterPage() {
         const availableDice = DIES.filter(d => !usedDice.includes(d));
         return `
         <tr class="stats-row">
-          <th scope="row" class="stats-name"><span class="sn">${cap(s)}${bonused.includes(s) ? `<span class="sb">+1</span>` : ""}</span></th>
+          <th scope="row" class="stats-name"><span class="sn">${cap(s)}</span></th>
           <td class="stats-value"><select class="sdie" id="stat-${s}">
             <option value="">—</option>
             ${availableDice.map(d => `<option value="${d}" ${state.stats[s] === d ? "selected" : ""}>${d}</option>`).join("")}
           </select></td>
+          <td class="stats-bonus">${bonused.includes(s) ? "+1" : "—"}</td>
         </tr>
       `}).join("")}
       </tbody>
@@ -853,13 +861,21 @@ async function loadPoweredPage(preloadedMetadata) {
     <div class="powered-field"><span class="pe-label">Age</span><span>${cap(powered.age || "—")}</span></div>
     <div class="sh">Stats</div>
     <table class="stats-table" aria-label="Powered character stats">
+      <thead>
+        <tr class="stats-head-row">
+          <th class="stats-head">Stat</th>
+          <th class="stats-head stats-head-right">Die</th>
+          <th class="stats-head stats-head-right">Bonus</th>
+        </tr>
+      </thead>
       <tbody>
       ${(() => {
         const bonused = AGE_BONUSES[powered.age] || [];
         return STATS.map(stat => `
         <tr class="stats-row">
-          <th scope="row" class="stats-name"><span class="sn">${cap(stat)}${bonused.includes(stat) ? `<span class="sb">+1</span>` : ""}</span></th>
-          <td class="stats-value"><span class="sd">${formatStatDie(powered.stats?.[stat], bonused.includes(stat))}</span></td>
+          <th scope="row" class="stats-name"><span class="sn">${cap(stat)}</span></th>
+          <td class="stats-value"><span class="sd">${formatStatDie(powered.stats?.[stat], false)}</span></td>
+          <td class="stats-bonus">${bonused.includes(stat) ? "+1" : "—"}</td>
         </tr>
       `).join("");
       })()}

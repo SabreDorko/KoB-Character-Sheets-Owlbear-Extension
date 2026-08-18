@@ -257,12 +257,31 @@ select.fsel option { direction: ltr; }
   table-layout: fixed;
 }
 
+.stats-head-row {
+  height: 24px;
+}
+
+.stats-head {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  text-align: left;
+  padding: 0;
+  border-bottom: 0.5px solid;
+}
+
+.stats-head-right {
+  text-align: right;
+}
+
 .stats-row {
   height: 24px;
 }
 
 .stats-name,
-.stats-value {
+.stats-value,
+.stats-bonus {
   height: 24px;
   border-bottom: 0.5px solid;
   padding: 0;
@@ -272,21 +291,41 @@ select.fsel option { direction: ltr; }
 .stats-name {
   text-align: left;
   font-weight: 500;
+  width: 48%;
 }
 
 .stats-value {
   text-align: right;
+  width: 28%;
+  border-left: 0.5px solid;
+}
+
+.stats-bonus {
+  text-align: right;
+  width: 24%;
+  font-size: 11px;
+  font-weight: 600;
+  border-left: 0.5px solid;
 }
 
 .light .stats-name,
-.light .stats-value {
+.light .stats-value,
+.light .stats-bonus,
+.light .stats-head {
   border-color: var(--pr);
 }
 
 .dark .stats-name,
-.dark .stats-value {
+.dark .stats-value,
+.dark .stats-bonus,
+.dark .stats-head {
   border-color: var(--dr);
 }
+
+.light .stats-head { color: var(--pkf); }
+.dark .stats-head { color: var(--dkf); }
+.light .stats-bonus { color: var(--pa); }
+.dark .stats-bonus { color: var(--da); }
 
 .sgrid {
   display: grid;
