@@ -74,7 +74,7 @@ function renderGMApp(initialMetadata) {
       <div class="top-tabs">
         <div class="top-tab active" data-tab="party">Party</div>
         <div class="top-tab" data-tab="powered">Powered Character</div>
-        <div class="top-tab" data-tab="notes">GM Notes</div>
+        <div class="top-tab" data-tab="notes">Notes</div>
       </div>
       <div class="page active" data-page="party" id="page-party"></div>
       <div class="page" data-page="powered" id="page-powered"></div>
@@ -455,7 +455,7 @@ function renderGMNotesPage() {
 
   page.innerHTML = `
     <div class="sh">
-      <span>GM Notes</span>
+      <span>Notes</span>
       <button class="str-add-btn" id="gm-note-add-btn" type="button">New Note</button>
     </div>
     <div class="notes-wrap">
