@@ -50,12 +50,13 @@ export async function initGM(app) {
   });
 
   OBR.room.onMetadataChange(metadataUpdate => {
-    cachedMetadata = metadataUpdate;
-    poweredState = getPoweredState(metadataUpdate);
-    gmNotes = getGMNotes(metadataUpdate);
+    // Metadata updates can be partial; merge to avoid dropping unrelated keys.
+    cachedMetadata = { ...cachedMetadata, ...metadataUpdate };
+    poweredState = getPoweredState(cachedMetadata);
+    gmNotes = getGMNotes(cachedMetadata);
     gmNotes = mergeGMNotesByNewest(gmNotes, loadLocalGMNotes());
     persistLocalGMNotes();
-    renderPartyPage(metadataUpdate);
+    renderPartyPage(cachedMetadata);
     renderPoweredPage();
     renderGMNotesPage();
   });
@@ -706,7 +707,7 @@ function setupPoweredListeners() {
     }
 
     renderPoweredPage();
-    schedulePoweredSave();
+    void savePoweredNow();
   });
 
   document.getElementById("btn-power-cancel")?.addEventListener("click", () => {
@@ -727,7 +728,7 @@ function setupPoweredListeners() {
       poweredState.powers = poweredState.powers.filter(power => power.id !== powerId);
       if (editingPowerId === powerId) editingPowerId = null;
       renderPoweredPage();
-      schedulePoweredSave();
+      void savePoweredNow();
     });
   });
 
@@ -751,6 +752,11 @@ async function saveGMNotesNow() {
 
 async function savePowered() {
   await OBR.room.setMetadata({ [POWERED_KEY]: poweredState });
+}
+
+async function savePoweredNow() {
+  clearTimeout(saveTimeout);
+  await savePowered();
 }
 
 async function saveGMNotes() {

@@ -30,6 +30,7 @@ let activeNoteId = null;
 let noteView = "list";
 let currentPlayerId = "";
 let editingStats = false;
+let cachedMetadata = {};
 
 let metadataListenerBound = false;
 
@@ -52,6 +53,7 @@ async function saveNow() {
 async function load() {
   currentPlayerId = await OBR.player.getId();
   const metadata = await OBR.room.getMetadata();
+  cachedMetadata = metadata;
   const saved = metadata[`kob-sheet-${currentPlayerId}`];
   const localNotes = loadLocalNotes();
   const metadataNotes = normalizeNotes(saved?.notes);
@@ -76,8 +78,10 @@ export async function initSheet(app) {
   if (!metadataListenerBound) {
     metadataListenerBound = true;
     OBR.room.onMetadataChange((metadataUpdate) => {
-      renderPartyPage(metadataUpdate);
-      renderPoweredPage(metadataUpdate);
+      // Metadata updates can be partial; merge to preserve previously known keys.
+      cachedMetadata = { ...cachedMetadata, ...metadataUpdate };
+      renderPartyPage(cachedMetadata);
+      renderPoweredPage(cachedMetadata);
     });
   }
 }
