@@ -25,3 +25,17 @@ export function decodeMetadataValue(raw) {
 export function getMetadataValue(metadata, key) {
   return decodeMetadataValue(metadata?.[key]);
 }
+
+// OBR's own over-limit error is thrown host-side and isn't reliably catchable from
+// the extension iframe, so we pre-check size against the cached metadata instead.
+const ROOM_METADATA_BUDGET = 15000;
+
+export function estimateMetadataBytes(metadataLike) {
+  return new Blob([JSON.stringify(metadataLike)]).size;
+}
+
+export function wouldExceedRoomBudget(cachedMetadata, key, encodedValue) {
+  const projected = { ...(cachedMetadata || {}), [key]: encodedValue };
+  return estimateMetadataBytes(projected) > ROOM_METADATA_BUDGET;
+}
+

@@ -3,7 +3,7 @@ import TROPES from "./data/tropes.json";
 import STRENGTHS from "./data/strengths.json";
 import ageRules from "./data/age-rules.json";
 import { showSaving, showSaved, showSaveError } from "./save-indicator.js";
-import { encodeMetadataValue, getMetadataValue } from "./metadata-codec.js";
+import { encodeMetadataValue, getMetadataValue, wouldExceedRoomBudget } from "./metadata-codec.js";
 
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
@@ -31,6 +31,7 @@ let activeGMNoteId = null;
 let gmNoteView = "list";
 
 const GM_LOCAL_NOTES_KEY = "kob-gm-local-notes";
+const POWERED_LOCAL_KEY = "kob-powered-local";
 
 export async function initGM(app) {
   appRoot = app;
@@ -41,7 +42,9 @@ export async function initGM(app) {
   ]);
   cachedPlayers = players;
   cachedMetadata = metadata;
-  poweredState = getPoweredState(metadata);
+  // The room save can silently fail to persist (e.g. size limit), so prefer
+  // whichever of the room/local copies has the newer save timestamp.
+  poweredState = pickNewestPoweredState(getPoweredState(metadata), loadLocalPoweredState());
   gmNotes = mergeGMNotesByNewest(getGMNotes(metadata), loadLocalGMNotes());
   persistLocalGMNotes();
   renderGMApp(metadata);
@@ -772,12 +775,25 @@ async function saveGMNotesNow() {
 
 async function savePowered() {
   showSaving(gmTheme);
+  persistLocalPoweredState();
+
+  const encoded = encodeMetadataValue(poweredState);
+
+  // OBR's room metadata is capped at 16kB total across all keys. The host throws
+  // this error in its own frame, where our try/catch below can't reliably see it,
+  // so pre-check size against what we last saw and fall back to the local copy.
+  if (wouldExceedRoomBudget(cachedMetadata, POWERED_KEY, encoded)) {
+    console.error("Skipped room save: powered character would exceed the room metadata size limit");
+    showSaveError(gmTheme, "Saved locally only (room full)");
+    return;
+  }
+
   try {
-    await OBR.room.setMetadata({ [POWERED_KEY]: encodeMetadataValue(poweredState) });
+    await OBR.room.setMetadata({ [POWERED_KEY]: encoded });
     showSaved(gmTheme);
   } catch (err) {
     console.error("Failed to save powered character:", err);
-    showSaveError(gmTheme);
+    showSaveError(gmTheme, "Saved locally only (save failed)");
   }
 }
 
@@ -790,12 +806,21 @@ async function savePoweredNow() {
 async function saveGMNotes() {
   showSaving(gmTheme);
   persistLocalGMNotes();
+
+  const encoded = encodeMetadataValue(gmNotes);
+
+  if (wouldExceedRoomBudget(cachedMetadata, GM_NOTES_KEY, encoded)) {
+    console.error("Skipped room save: GM notes would exceed the room metadata size limit");
+    showSaveError(gmTheme, "Saved locally only (room full)");
+    return;
+  }
+
   try {
-    await OBR.room.setMetadata({ [GM_NOTES_KEY]: encodeMetadataValue(gmNotes) });
+    await OBR.room.setMetadata({ [GM_NOTES_KEY]: encoded });
     showSaved(gmTheme);
   } catch (err) {
     console.error("Failed to save GM notes:", err);
-    showSaveError(gmTheme);
+    showSaveError(gmTheme, "Saved locally only (save failed)");
   }
 }
 
@@ -948,6 +973,32 @@ function loadLocalGMNotes() {
   } catch {
     return [];
   }
+}
+
+// Full, uncompressed backup of the powered character. localStorage has no
+// meaningful size limit, so this survives even when the shared room save fails.
+function loadLocalPoweredState() {
+  try {
+    const raw = localStorage.getItem(POWERED_LOCAL_KEY);
+    if (!raw) return null;
+    return getPoweredState({ [POWERED_KEY]: JSON.parse(raw) });
+  } catch {
+    return null;
+  }
+}
+
+function persistLocalPoweredState() {
+  try {
+    localStorage.setItem(POWERED_LOCAL_KEY, JSON.stringify(poweredState));
+  } catch {
+    // Best-effort cache only.
+  }
+}
+
+function pickNewestPoweredState(roomState, localState) {
+  if (!roomState) return localState || emptyPoweredState();
+  if (!localState) return roomState;
+  return (localState.updatedAt || 0) > (roomState.updatedAt || 0) ? localState : roomState;
 }
 
 function loadGMTheme() {

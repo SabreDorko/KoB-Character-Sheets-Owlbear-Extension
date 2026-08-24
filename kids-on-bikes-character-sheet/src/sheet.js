@@ -3,7 +3,7 @@ import TROPES from "./data/tropes.json";
 import STRENGTHS from "./data/strengths.json";
 import ageRules from "./data/age-rules.json";
 import { showSaving, showSaved, showSaveError } from "./save-indicator.js";
-import { encodeMetadataValue, getMetadataValue } from "./metadata-codec.js";
+import { encodeMetadataValue, getMetadataValue, wouldExceedRoomBudget } from "./metadata-codec.js";
 
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
@@ -25,6 +25,7 @@ let state = {
   inventory: [],
   notes: [],
   editingStrengths: false,
+  savedAt: 0,
 };
 
 let strengthEditor = emptyStrengthEditor();
@@ -46,12 +47,28 @@ function scheduleSave() {
 async function save() {
   showSaving(state.theme);
   if (!currentPlayerId) currentPlayerId = await OBR.player.getId();
+
+  state.savedAt = Date.now();
+  persistLocalSheet();
+
+  const key = `kob-sheet-${currentPlayerId}`;
+  const encoded = encodeMetadataValue(state);
+
+  // OBR's room metadata is capped at 16kB total across all keys. The host throws
+  // this error in its own frame, where our try/catch below can't reliably see it,
+  // so pre-check size against what we last saw and fall back to the local copy.
+  if (wouldExceedRoomBudget(cachedMetadata, key, encoded)) {
+    console.error("Skipped room save: sheet would exceed the room metadata size limit");
+    showSaveError(state.theme, "Saved locally only (room full)");
+    return;
+  }
+
   try {
-    await OBR.room.setMetadata({ [`kob-sheet-${currentPlayerId}`]: encodeMetadataValue(state) });
+    await OBR.room.setMetadata({ [key]: encoded });
     showSaved(state.theme);
   } catch (err) {
     console.error("Failed to save character sheet:", err);
-    showSaveError(state.theme);
+    showSaveError(state.theme, "Saved locally only (save failed)");
   }
 }
 
@@ -64,7 +81,11 @@ async function load() {
   currentPlayerId = await OBR.player.getId();
   const metadata = await OBR.room.getMetadata();
   cachedMetadata = metadata;
-  const saved = getMetadataValue(metadata, `kob-sheet-${currentPlayerId}`);
+  const roomSaved = getMetadataValue(metadata, `kob-sheet-${currentPlayerId}`);
+  const localSaved = loadLocalSheet();
+  // The room save can silently fail to persist (e.g. size limit), so prefer
+  // whichever of the room/local copies has the newer save timestamp.
+  const saved = pickNewestSheet(roomSaved, localSaved);
   const localNotes = loadLocalNotes();
   const metadataNotes = normalizeNotes(saved?.notes);
   const mergedNotes = mergeNotesByNewest(metadataNotes, localNotes);
@@ -79,6 +100,7 @@ async function load() {
   }
 
   persistLocalNotes();
+  persistLocalSheet();
 }
 
 export async function initSheet(app) {
@@ -1093,4 +1115,36 @@ function persistLocalNotes() {
   } catch {
     // Best-effort cache only.
   }
+}
+
+function localSheetStorageKey() {
+  return `kob-local-sheet-${currentPlayerId || "unknown"}`;
+}
+
+// Full, uncompressed backup of this player's own sheet. localStorage has no
+// meaningful size limit, so this survives even when the shared room save fails.
+function loadLocalSheet() {
+  try {
+    const raw = localStorage.getItem(localSheetStorageKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistLocalSheet() {
+  if (!currentPlayerId) return;
+  try {
+    localStorage.setItem(localSheetStorageKey(), JSON.stringify(state));
+  } catch {
+    // Best-effort cache only.
+  }
+}
+
+function pickNewestSheet(roomSheet, localSheet) {
+  if (!roomSheet) return localSheet;
+  if (!localSheet) return roomSheet;
+  const roomSavedAt = roomSheet.savedAt || 0;
+  const localSavedAt = localSheet.savedAt || 0;
+  return localSavedAt > roomSavedAt ? localSheet : roomSheet;
 }
