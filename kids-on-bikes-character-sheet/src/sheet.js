@@ -2,6 +2,7 @@ import OBR from "@owlbear-rodeo/sdk";
 import TROPES from "./data/tropes.json";
 import STRENGTHS from "./data/strengths.json";
 import ageRules from "./data/age-rules.json";
+import { showSaving, showSaved } from "./save-indicator.js";
 
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
@@ -36,13 +37,16 @@ let metadataListenerBound = false;
 
 let saveTimeout = null;
 function scheduleSave() {
+  showSaving(state.theme);
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(save, 600);
 }
 
 async function save() {
+  showSaving(state.theme);
   if (!currentPlayerId) currentPlayerId = await OBR.player.getId();
   await OBR.room.setMetadata({ [`kob-sheet-${currentPlayerId}`]: state });
+  showSaved(state.theme);
 }
 
 async function saveNow() {
@@ -81,7 +85,11 @@ export async function initSheet(app) {
       // Metadata updates can be partial; merge to preserve previously known keys.
       cachedMetadata = { ...cachedMetadata, ...metadataUpdate };
       renderPartyPage(cachedMetadata);
-      renderPoweredPage(cachedMetadata);
+      // Only re-render the powered page when its data actually changed, so
+      // unrelated updates (other players' sheets, etc.) don't needlessly reset it.
+      if (Object.prototype.hasOwnProperty.call(metadataUpdate, POWERED_KEY)) {
+        renderPoweredPage(cachedMetadata);
+      }
     });
   }
 }

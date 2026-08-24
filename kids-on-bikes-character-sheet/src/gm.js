@@ -2,6 +2,7 @@ import OBR from "@owlbear-rodeo/sdk";
 import TROPES from "./data/tropes.json";
 import STRENGTHS from "./data/strengths.json";
 import ageRules from "./data/age-rules.json";
+import { showSaving, showSaved } from "./save-indicator.js";
 
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
@@ -52,13 +53,22 @@ export async function initGM(app) {
   OBR.room.onMetadataChange(metadataUpdate => {
     // Metadata updates can be partial; merge to avoid dropping unrelated keys.
     cachedMetadata = { ...cachedMetadata, ...metadataUpdate };
-    poweredState = getPoweredState(cachedMetadata);
-    gmNotes = getGMNotes(cachedMetadata);
-    gmNotes = mergeGMNotesByNewest(gmNotes, loadLocalGMNotes());
-    persistLocalGMNotes();
     renderPartyPage(cachedMetadata);
-    renderPoweredPage();
-    renderGMNotesPage();
+
+    // Only touch powered/notes state when their own keys changed, so unrelated
+    // updates (e.g. a player editing their own sheet) don't clobber an
+    // in-progress, not-yet-saved edit (like a power description being typed).
+    if (Object.prototype.hasOwnProperty.call(metadataUpdate, POWERED_KEY)) {
+      poweredState = getPoweredState(cachedMetadata);
+      renderPoweredPage();
+    }
+
+    if (Object.prototype.hasOwnProperty.call(metadataUpdate, GM_NOTES_KEY)) {
+      gmNotes = getGMNotes(cachedMetadata);
+      gmNotes = mergeGMNotesByNewest(gmNotes, loadLocalGMNotes());
+      persistLocalGMNotes();
+      renderGMNotesPage();
+    }
   });
 }
 
@@ -736,11 +746,13 @@ function setupPoweredListeners() {
 }
 
 function schedulePoweredSave() {
+  showSaving(gmTheme);
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(savePowered, 300);
 }
 
 function scheduleGMNotesSave() {
+  showSaving(gmTheme);
   clearTimeout(notesSaveTimeout);
   notesSaveTimeout = setTimeout(saveGMNotes, 300);
 }
@@ -751,7 +763,9 @@ async function saveGMNotesNow() {
 }
 
 async function savePowered() {
+  showSaving(gmTheme);
   await OBR.room.setMetadata({ [POWERED_KEY]: poweredState });
+  showSaved(gmTheme);
 }
 
 async function savePoweredNow() {
@@ -760,8 +774,10 @@ async function savePoweredNow() {
 }
 
 async function saveGMNotes() {
+  showSaving(gmTheme);
   persistLocalGMNotes();
   await OBR.room.setMetadata({ [GM_NOTES_KEY]: gmNotes });
+  showSaved(gmTheme);
 }
 
 function renderPowersList(powers, editable = false) {

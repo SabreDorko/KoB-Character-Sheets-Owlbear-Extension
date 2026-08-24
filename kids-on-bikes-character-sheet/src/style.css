@@ -38,6 +38,23 @@ body {
 body.light { background: var(--pl); }
 body.dark  { background: var(--dl); }
 
+/* SAVE INDICATOR */
+.save-indicator {
+  position: fixed;
+  left: 8px;
+  bottom: 6px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+  z-index: 1000;
+}
+.save-indicator.visible { opacity: 0.6; }
+.save-indicator.faded { opacity: 0; }
+.save-indicator.light { color: var(--pkm); }
+.save-indicator.dark  { color: var(--dkm); }
+
 /* HEADER */
 .book-header {
   display: flex;
