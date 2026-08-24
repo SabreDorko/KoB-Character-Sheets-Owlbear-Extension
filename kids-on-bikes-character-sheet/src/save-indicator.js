@@ -1,6 +1,5 @@
 // Fixed bottom-left indicator showing save status, shared by sheet.js and gm.js.
 let el = null;
-let fadeTimeout = null;
 
 function ensureEl() {
   if (el && document.body.contains(el)) return el;
@@ -17,22 +16,17 @@ function setTheme(node, theme) {
 }
 
 export function showSaving(theme) {
-  clearTimeout(fadeTimeout);
   const node = ensureEl();
   setTheme(node, theme);
   node.textContent = "Saving...";
-  node.classList.remove("faded");
+  node.classList.remove("saved");
   node.classList.add("visible");
 }
 
 export function showSaved(theme) {
-  clearTimeout(fadeTimeout);
   const node = ensureEl();
   setTheme(node, theme);
   node.textContent = "Saved";
-  node.classList.remove("faded");
-  node.classList.add("visible");
-  fadeTimeout = setTimeout(() => {
-    node.classList.add("faded");
-  }, 1200);
+  // Stays dimly visible (rather than fading out) so the last save state is always in view.
+  node.classList.add("visible", "saved");
 }

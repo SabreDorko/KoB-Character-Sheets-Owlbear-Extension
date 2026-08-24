@@ -51,7 +51,7 @@ body.dark  { background: var(--dl); }
   z-index: 1000;
 }
 .save-indicator.visible { opacity: 0.6; }
-.save-indicator.faded { opacity: 0; }
+.save-indicator.visible.saved { opacity: 0.35; }
 .save-indicator.light { color: var(--pkm); }
 .save-indicator.dark  { color: var(--dkm); }
 

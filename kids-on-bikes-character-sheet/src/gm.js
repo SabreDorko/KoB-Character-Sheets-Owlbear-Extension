@@ -58,9 +58,14 @@ export async function initGM(app) {
     // Only touch powered/notes state when their own keys changed, so unrelated
     // updates (e.g. a player editing their own sheet) don't clobber an
     // in-progress, not-yet-saved edit (like a power description being typed).
+    // The metadata event can deliver a stale snapshot racing a concurrent
+    // write elsewhere, so only accept it if it isn't older than our local copy.
     if (Object.prototype.hasOwnProperty.call(metadataUpdate, POWERED_KEY)) {
-      poweredState = getPoweredState(cachedMetadata);
-      renderPoweredPage();
+      const incomingPowered = getPoweredState(cachedMetadata);
+      if ((incomingPowered.updatedAt || 0) >= (poweredState.updatedAt || 0)) {
+        poweredState = incomingPowered;
+        renderPoweredPage();
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(metadataUpdate, GM_NOTES_KEY)) {
@@ -746,6 +751,7 @@ function setupPoweredListeners() {
 }
 
 function schedulePoweredSave() {
+  poweredState.updatedAt = Date.now();
   showSaving(gmTheme);
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(savePowered, 300);
@@ -769,6 +775,7 @@ async function savePowered() {
 }
 
 async function savePoweredNow() {
+  poweredState.updatedAt = Date.now();
   clearTimeout(saveTimeout);
   await savePowered();
 }
@@ -872,6 +879,7 @@ function emptyPoweredState() {
     psychicEnergyMax: "",
     inventory: [],
     powers: [],
+    updatedAt: 0,
   };
 }
 
