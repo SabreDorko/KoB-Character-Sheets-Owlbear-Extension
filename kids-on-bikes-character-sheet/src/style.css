@@ -54,6 +54,7 @@ body.dark  { background: var(--dl); }
 .save-indicator.visible.saved { opacity: 0.35; }
 .save-indicator.light { color: var(--pkm); }
 .save-indicator.dark  { color: var(--dkm); }
+.save-indicator.error { color: #c0392b; opacity: 0.9; }
 
 /* HEADER */
 .book-header {

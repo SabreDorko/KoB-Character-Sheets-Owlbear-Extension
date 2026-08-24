@@ -19,7 +19,7 @@ export function showSaving(theme) {
   const node = ensureEl();
   setTheme(node, theme);
   node.textContent = "Saving...";
-  node.classList.remove("saved");
+  node.classList.remove("saved", "error");
   node.classList.add("visible");
 }
 
@@ -28,5 +28,14 @@ export function showSaved(theme) {
   setTheme(node, theme);
   node.textContent = "Saved";
   // Stays dimly visible (rather than fading out) so the last save state is always in view.
+  node.classList.remove("error");
   node.classList.add("visible", "saved");
+}
+
+export function showSaveError(theme, message = "Save failed") {
+  const node = ensureEl();
+  setTheme(node, theme);
+  node.textContent = message;
+  node.classList.remove("saved");
+  node.classList.add("visible", "error");
 }

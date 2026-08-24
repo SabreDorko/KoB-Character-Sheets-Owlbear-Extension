@@ -2,7 +2,8 @@ import OBR from "@owlbear-rodeo/sdk";
 import TROPES from "./data/tropes.json";
 import STRENGTHS from "./data/strengths.json";
 import ageRules from "./data/age-rules.json";
-import { showSaving, showSaved } from "./save-indicator.js";
+import { showSaving, showSaved, showSaveError } from "./save-indicator.js";
+import { encodeMetadataValue, getMetadataValue } from "./metadata-codec.js";
 
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
@@ -45,8 +46,13 @@ function scheduleSave() {
 async function save() {
   showSaving(state.theme);
   if (!currentPlayerId) currentPlayerId = await OBR.player.getId();
-  await OBR.room.setMetadata({ [`kob-sheet-${currentPlayerId}`]: state });
-  showSaved(state.theme);
+  try {
+    await OBR.room.setMetadata({ [`kob-sheet-${currentPlayerId}`]: encodeMetadataValue(state) });
+    showSaved(state.theme);
+  } catch (err) {
+    console.error("Failed to save character sheet:", err);
+    showSaveError(state.theme);
+  }
 }
 
 async function saveNow() {
@@ -58,7 +64,7 @@ async function load() {
   currentPlayerId = await OBR.player.getId();
   const metadata = await OBR.room.getMetadata();
   cachedMetadata = metadata;
-  const saved = metadata[`kob-sheet-${currentPlayerId}`];
+  const saved = getMetadataValue(metadata, `kob-sheet-${currentPlayerId}`);
   const localNotes = loadLocalNotes();
   const metadataNotes = normalizeNotes(saved?.notes);
   const mergedNotes = mergeNotesByNewest(metadataNotes, localNotes);
@@ -800,7 +806,7 @@ async function loadParty(preloadedMetadata) {
   if (!list) return;
 
   const sheets = players
-    .map(p => ({ player: p, data: metadata[`kob-sheet-${p.id}`] }))
+    .map(p => ({ player: p, data: getMetadataValue(metadata, `kob-sheet-${p.id}`) }))
     .filter(({ data }) => data && data.name);
 
   if (!sheets.length) {
@@ -999,6 +1005,7 @@ function setupPowerExpandListeners(container = document) {
 }
 
 function getPoweredState(metadata) {
+  const saved = getMetadataValue(metadata, POWERED_KEY) || {};
   return {
     name: "",
     trope: "",
@@ -1009,7 +1016,7 @@ function getPoweredState(metadata) {
     psychicEnergyMax: "",
     powers: [],
     inventory: [],
-    ...(metadata[POWERED_KEY] || {}),
+    ...saved,
     stats: {
       fight: "",
       flight: "",
@@ -1017,7 +1024,7 @@ function getPoweredState(metadata) {
       brawn: "",
       charm: "",
       grit: "",
-      ...(metadata[POWERED_KEY]?.stats || {}),
+      ...(saved.stats || {}),
     },
   };
 }

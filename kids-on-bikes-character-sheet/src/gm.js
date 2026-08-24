@@ -2,7 +2,8 @@ import OBR from "@owlbear-rodeo/sdk";
 import TROPES from "./data/tropes.json";
 import STRENGTHS from "./data/strengths.json";
 import ageRules from "./data/age-rules.json";
-import { showSaving, showSaved } from "./save-indicator.js";
+import { showSaving, showSaved, showSaveError } from "./save-indicator.js";
+import { encodeMetadataValue, getMetadataValue } from "./metadata-codec.js";
 
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
@@ -41,7 +42,6 @@ export async function initGM(app) {
   cachedPlayers = players;
   cachedMetadata = metadata;
   poweredState = getPoweredState(metadata);
-  console.log("[kob-debug] initGM loaded powered state ->", poweredState);
   gmNotes = mergeGMNotesByNewest(getGMNotes(metadata), loadLocalGMNotes());
   persistLocalGMNotes();
   renderGMApp(metadata);
@@ -64,13 +64,6 @@ export async function initGM(app) {
     if (Object.prototype.hasOwnProperty.call(metadataUpdate, POWERED_KEY)) {
       const incomingPowered = getPoweredState(cachedMetadata);
       const accepted = (incomingPowered.updatedAt || 0) >= (poweredState.updatedAt || 0);
-      console.log("[kob-debug] powered metadata event", {
-        accepted,
-        incomingUpdatedAt: incomingPowered.updatedAt,
-        localUpdatedAt: poweredState.updatedAt,
-        incomingPowerCount: incomingPowered.powers.length,
-        localPowerCount: poweredState.powers.length,
-      });
       if (accepted) {
         poweredState = incomingPowered;
         renderPoweredPage();
@@ -191,7 +184,7 @@ async function loadPartyPage(preloadedMetadata) {
   const metadata = preloadedMetadata ?? cachedMetadata ?? await OBR.room.getMetadata();
 
   const sheets = players
-    .map(player => ({ player, data: metadata[`kob-sheet-${player.id}`] }))
+    .map(player => ({ player, data: getMetadataValue(metadata, `kob-sheet-${player.id}`) }))
     .filter(({ data }) => data && data.name);
 
   if (!sheets.length) {
@@ -261,7 +254,7 @@ async function loadPlayerSheetView(preloadedMetadata) {
   const metadata = preloadedMetadata ?? cachedMetadata ?? await OBR.room.getMetadata();
 
   const player = players.find(item => item.id === selectedPlayerId);
-  const data = metadata[`kob-sheet-${selectedPlayerId}`];
+  const data = getMetadataValue(metadata, `kob-sheet-${selectedPlayerId}`);
   if (!player || !data) {
     container.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">That sheet is no longer available.</div>`;
     return;
@@ -713,8 +706,6 @@ function setupPoweredListeners() {
     const title = titleInput.value.trim();
     const description = descriptionInput.value.trim();
 
-    console.log("[kob-debug] btn-power-add click", { editingPowerId, title, description });
-
     if (!title || !description) return;
 
     if (editingPowerId) {
@@ -781,9 +772,13 @@ async function saveGMNotesNow() {
 
 async function savePowered() {
   showSaving(gmTheme);
-  console.log("[kob-debug] savePowered ->", JSON.parse(JSON.stringify(poweredState)));
-  await OBR.room.setMetadata({ [POWERED_KEY]: poweredState });
-  showSaved(gmTheme);
+  try {
+    await OBR.room.setMetadata({ [POWERED_KEY]: encodeMetadataValue(poweredState) });
+    showSaved(gmTheme);
+  } catch (err) {
+    console.error("Failed to save powered character:", err);
+    showSaveError(gmTheme);
+  }
 }
 
 async function savePoweredNow() {
@@ -795,8 +790,13 @@ async function savePoweredNow() {
 async function saveGMNotes() {
   showSaving(gmTheme);
   persistLocalGMNotes();
-  await OBR.room.setMetadata({ [GM_NOTES_KEY]: gmNotes });
-  showSaved(gmTheme);
+  try {
+    await OBR.room.setMetadata({ [GM_NOTES_KEY]: encodeMetadataValue(gmNotes) });
+    showSaved(gmTheme);
+  } catch (err) {
+    console.error("Failed to save GM notes:", err);
+    showSaveError(gmTheme);
+  }
 }
 
 function renderPowersList(powers, editable = false) {
@@ -897,7 +897,7 @@ function emptyPoweredState() {
 
 function getPoweredState(metadata) {
   const base = emptyPoweredState();
-  const saved = metadata[POWERED_KEY] || {};
+  const saved = getMetadataValue(metadata, POWERED_KEY) || {};
   const powers = Array.isArray(saved.powers)
     ? saved.powers
         .filter(power => power && typeof power === "object")
@@ -916,7 +916,7 @@ function getPoweredState(metadata) {
 }
 
 function getGMNotes(metadata) {
-  const saved = metadata[GM_NOTES_KEY];
+  const saved = getMetadataValue(metadata, GM_NOTES_KEY);
   if (!Array.isArray(saved)) return [];
   return saved
     .filter(note => note && typeof note === "object")
