@@ -41,6 +41,7 @@ export async function initGM(app) {
   cachedPlayers = players;
   cachedMetadata = metadata;
   poweredState = getPoweredState(metadata);
+  console.log("[kob-debug] initGM loaded powered state ->", poweredState);
   gmNotes = mergeGMNotesByNewest(getGMNotes(metadata), loadLocalGMNotes());
   persistLocalGMNotes();
   renderGMApp(metadata);
@@ -62,7 +63,15 @@ export async function initGM(app) {
     // write elsewhere, so only accept it if it isn't older than our local copy.
     if (Object.prototype.hasOwnProperty.call(metadataUpdate, POWERED_KEY)) {
       const incomingPowered = getPoweredState(cachedMetadata);
-      if ((incomingPowered.updatedAt || 0) >= (poweredState.updatedAt || 0)) {
+      const accepted = (incomingPowered.updatedAt || 0) >= (poweredState.updatedAt || 0);
+      console.log("[kob-debug] powered metadata event", {
+        accepted,
+        incomingUpdatedAt: incomingPowered.updatedAt,
+        localUpdatedAt: poweredState.updatedAt,
+        incomingPowerCount: incomingPowered.powers.length,
+        localPowerCount: poweredState.powers.length,
+      });
+      if (accepted) {
         poweredState = incomingPowered;
         renderPoweredPage();
       }
@@ -704,6 +713,8 @@ function setupPoweredListeners() {
     const title = titleInput.value.trim();
     const description = descriptionInput.value.trim();
 
+    console.log("[kob-debug] btn-power-add click", { editingPowerId, title, description });
+
     if (!title || !description) return;
 
     if (editingPowerId) {
@@ -770,6 +781,7 @@ async function saveGMNotesNow() {
 
 async function savePowered() {
   showSaving(gmTheme);
+  console.log("[kob-debug] savePowered ->", JSON.parse(JSON.stringify(poweredState)));
   await OBR.room.setMetadata({ [POWERED_KEY]: poweredState });
   showSaved(gmTheme);
 }
