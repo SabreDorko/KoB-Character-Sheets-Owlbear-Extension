@@ -1287,9 +1287,9 @@ function renderStoragePage(metadata) {
       ${renderUsageMeter(usage)}
       <div class="storage-inspector">
         <div class="storage-section">
-          <div class="storage-section-title">Kids on Bikes Data (${formatKB(storageBreakdown.kobBytes)})</div>
+          <div class="storage-section-title">Room Metadata Breakdown</div>
           <div class="storage-items">
-            ${storageBreakdown.kob.map((item, idx) => `
+            ${storageBreakdown.items.map((item, idx) => `
               <div class="storage-item">
                 <div class="storage-item-header">
                   <span class="storage-item-key">${esc(item.key)}</span>
@@ -1302,26 +1302,9 @@ function renderStoragePage(metadata) {
             `).join("")}
           </div>
         </div>
-        ${Object.entries(storageBreakdown.byExtension).map(([ext, data]) => `
-          <div class="storage-section">
-            <div class="storage-section-title">${esc(ext || "Unknown Extension")} (${formatKB(data.bytes)})</div>
-            <div class="storage-items">
-              ${data.items.map((item, idx) => `
-                <div class="storage-item other-ext">
-                  <div class="storage-item-header">
-                    <span class="storage-item-key">${esc(item.key)}</span>
-                    <span class="storage-item-size">${formatKB(item.bytes)}</span>
-                  </div>
-                  <div class="storage-item-type">From ${esc(ext || "unknown")}</div>
-                  <div class="storage-item-preview" style="color:#8b5cf6;">Preview (first 80 chars): ${esc(String(item.rawValue).slice(0, 80))}</div>
-                </div>
-              `).join("")}
-            </div>
-          </div>
-        `).join("")}
         ${storageBreakdown.unknown.length ? `
           <div class="storage-section">
-            <div class="storage-section-title">Unidentified/Suspicious Keys (${storageBreakdown.unknown.length})</div>
+            <div class="storage-section-title">Unknown/Suspicious Keys (${storageBreakdown.unknown.length})</div>
             <p style="font-size:11px;opacity:0.7;margin:8px 0;">These keys don't match known patterns. They may be from old builds or corrupted data.</p>
             <div class="storage-items">
               ${storageBreakdown.unknown.map((item, idx) => `
@@ -1341,15 +1324,14 @@ function renderStoragePage(metadata) {
       </div>
     `;
 
-    // Attach delete handlers for KoB keys
-    storageBreakdown.kob.forEach((item, idx) => {
+    // Attach delete handlers
+    storageBreakdown.items.forEach((item, idx) => {
       const btn = page.querySelector(`[data-storage-delete="${idx}"]`);
       if (btn) {
         armConfirm(btn, () => deleteStorageKey(item.key));
       }
     });
 
-    // Attach delete handlers for unknown keys
     storageBreakdown.unknown.forEach((item, idx) => {
       const btn = page.querySelector(`[data-storage-delete-unknown="${idx}"]`);
       if (btn) {
@@ -1363,82 +1345,77 @@ function renderStoragePage(metadata) {
 }
 
 function buildStorageBreakdown(metadata) {
-  const kob = [];
+  const items = [];
   const unknown = [];
-  const byExtension = {};
-  let kobBytes = 0;
+  const knownPatterns = new Set([
+    "kob-sheet-",
+    "kob-powered-sheet",
+    "kob-gm-notes",
+    "kob-room-instance"
+  ]);
 
   Object.entries(metadata || {}).forEach(([key, rawValue]) => {
     if (rawValue === undefined) return;
 
     const bytes = entryBytes(key, rawValue);
+    let type = "Unknown";
+    let preview = "";
+    let decodable = false;
+    let isKnown = false;
 
-    // Handle Kids on Bikes keys
-    if (key.startsWith("kob-")) {
-      let type = "Unknown";
-      let preview = "";
-      let decodable = false;
-
-      // Identify KoB key type
-      if (key === "kob-room-instance") {
-        type = "Room Instance ID";
-        const decoded = getMetadataValue(metadata, key);
-        decodable = true;
-        preview = `Value: ${esc(String(decoded || ""))}`;
-      } else if (key === "kob-powered-sheet") {
-        type = "Powered Character (GM)";
-        const decoded = getMetadataValue(metadata, key);
-        decodable = !!decoded;
-        preview = decodable ? "Powered character data (compressed)" : "Failed to decode";
-      } else if (key === "kob-gm-notes") {
-        type = "GM Notes";
-        const decoded = getMetadataValue(metadata, key);
-        decodable = !!decoded;
-        preview = decodable ? `${Array.isArray(decoded) ? decoded.length : 0} notes` : "Failed to decode";
-      } else if (key.startsWith("kob-sheet-")) {
-        type = "Character Sheet";
-        const playerId = key.slice("kob-sheet-".length);
-        const decoded = getMetadataValue(metadata, key);
-        decodable = !!decoded && typeof decoded === "object";
-        preview = decodable ? `Player: ${esc(decoded.name || "Unnamed")}` : "Failed to decode";
-      } else {
-        type = "Kids on Bikes (Legacy/Unknown)";
-        unknown.push({ key, bytes, rawValue });
-        return;
-      }
-
-      kob.push({
-        key,
-        type,
-        bytes,
-        preview,
-        decodable,
-        rawValue
-      });
-      kobBytes += bytes;
+    // Identify key type
+    if (key === "kob-room-instance") {
+      type = "Room Instance ID";
+      isKnown = true;
+      const decoded = getMetadataValue(metadata, key);
+      decodable = true;
+      preview = `Value: ${esc(String(decoded || ""))}`;
+    } else if (key === "kob-powered-sheet") {
+      type = "Powered Character (GM)";
+      isKnown = true;
+      const decoded = getMetadataValue(metadata, key);
+      decodable = !!decoded;
+      preview = decodable ? "Powered character data (compressed)" : "Failed to decode";
+    } else if (key === "kob-gm-notes") {
+      type = "GM Notes";
+      isKnown = true;
+      const decoded = getMetadataValue(metadata, key);
+      decodable = !!decoded;
+      preview = decodable ? `${Array.isArray(decoded) ? decoded.length : 0} notes` : "Failed to decode";
+    } else if (key.startsWith("kob-sheet-")) {
+      type = "Character Sheet";
+      isKnown = true;
+      const playerId = key.slice("kob-sheet-".length);
+      const decoded = getMetadataValue(metadata, key);
+      decodable = !!decoded && typeof decoded === "object";
+      preview = decodable ? `Player: ${esc(decoded.name || "Unnamed")}` : "Failed to decode";
+    } else if (key.startsWith("kob-")) {
+      type = "Kids on Bikes (Legacy/Unknown)";
     } else {
-      // Other extension data
-      const extName = key.split("-")[0] || "Unknown";
-      if (!byExtension[extName]) {
-        byExtension[extName] = { items: [], bytes: 0 };
-      }
-      byExtension[extName].items.push({ key, bytes, rawValue });
-      byExtension[extName].bytes += bytes;
+      type = "Other Extension";
+    }
+
+    const item = {
+      key,
+      type,
+      bytes,
+      preview,
+      decodable,
+      rawValue
+    };
+
+    if (isKnown) {
+      items.push(item);
+    } else if (key.startsWith("kob-")) {
+      unknown.push(item);
     }
   });
 
-  // Sort KoB items by size
-  kob.sort((a, b) => b.bytes - a.bytes);
-  
-  // Sort extensions by total size
-  const sortedExt = {};
-  Object.entries(byExtension)
-    .sort(([, a], [, b]) => b.bytes - a.bytes)
-    .forEach(([ext, data]) => {
-      sortedExt[ext] = data;
-    });
+  // Sort by size descending
+  items.sort((a, b) => b.bytes - a.bytes);
+  unknown.sort((a, b) => b.bytes - a.bytes);
 
-  return { kob, kobBytes, byExtension: sortedExt, unknown };
+  return { items, unknown };
 }
 
 async function deleteStorageKey(key) {

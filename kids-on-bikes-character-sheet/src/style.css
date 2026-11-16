@@ -1118,13 +1118,6 @@ input.str-inline-input {
 .light .storage-item.suspicious { background: rgba(245, 158, 11, 0.05); }
 .dark  .storage-item.suspicious { background: rgba(245, 158, 11, 0.1); }
 
-.storage-item.other-ext {
-  border-color: #8b5cf6;
-  opacity: 0.9;
-}
-.light .storage-item.other-ext { background: rgba(139, 92, 246, 0.03); border-color: var(--pm); }
-.dark  .storage-item.other-ext { background: rgba(139, 92, 246, 0.08); border-color: var(--dd); }
-
 .storage-item-header {
   display: flex;
   justify-content: space-between;
