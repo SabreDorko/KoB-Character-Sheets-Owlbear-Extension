@@ -1077,8 +1077,6 @@ input.str-inline-input {
   gap: 16px;
   padding: 0 8px 8px 8px;
   font-size: 11px;
-  overflow-y: auto;
-  max-height: calc(100% - 100px);
 }
 
 .storage-section {
