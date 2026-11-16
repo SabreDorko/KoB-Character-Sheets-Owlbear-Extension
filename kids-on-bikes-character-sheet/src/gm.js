@@ -1314,6 +1314,7 @@ function renderStoragePage(metadata) {
                   </div>
                   <div class="storage-item-type">From ${esc(ext || "unknown")}</div>
                   <div class="storage-item-preview" style="color:#8b5cf6;">Preview (first 80 chars): ${esc(String(item.rawValue).slice(0, 80))}</div>
+                  <button class="str-remove storage-delete-btn" data-storage-delete-ext="${ext}|${idx}" title="Delete this key">Delete</button>
                 </div>
               `).join("")}
             </div>
@@ -1347,6 +1348,16 @@ function renderStoragePage(metadata) {
       if (btn) {
         armConfirm(btn, () => deleteStorageKey(item.key));
       }
+    });
+
+    // Attach delete handlers for other extension keys
+    Object.entries(storageBreakdown.byExtension).forEach(([ext, data]) => {
+      data.items.forEach((item, idx) => {
+        const btn = page.querySelector(`[data-storage-delete-ext="${ext}|${idx}"]`);
+        if (btn) {
+          armConfirm(btn, () => deleteStorageKey(item.key));
+        }
+      });
     });
 
     // Attach delete handlers for unknown keys
