@@ -3,11 +3,20 @@ import TROPES from "./data/tropes.json";
 import STRENGTHS from "./data/strengths.json";
 import ageRules from "./data/age-rules.json";
 import { showSaving, showSaved, showSaveError } from "./save-indicator.js";
-import { encodeMetadataValue, getMetadataValue, wouldExceedRoomBudget } from "./metadata-codec.js";
+import {
+  encodeMetadataValue,
+  getMetadataValue,
+  wouldExceedRoomBudget,
+  projectMetadata,
+  buildSheetMetadataKey,
+  listSheetEntries,
+  partyViewSignature,
+  resolveRoomInstanceId,
+  POWERED_KEY,
+} from "./metadata-codec.js";
 
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
-const POWERED_KEY = "kob-powered-sheet";
 
 const AGE_BONUSES = ageRules.bonuses;
 
@@ -24,6 +33,7 @@ let state = {
   strengths: [],
   inventory: [],
   notes: [],
+  grantedSkill: "",
   editingStrengths: false,
   savedAt: 0,
 };
@@ -32,8 +42,11 @@ let strengthEditor = emptyStrengthEditor();
 let activeNoteId = null;
 let noteView = "list";
 let currentPlayerId = "";
+let currentRoomInstanceId = "unknown-room";
 let editingStats = false;
 let cachedMetadata = {};
+let currentPlayerName = "";
+let metaSeq = 0;
 
 let metadataListenerBound = false;
 
@@ -51,20 +64,24 @@ async function save() {
   state.savedAt = Date.now();
   persistLocalSheet();
 
-  const key = `kob-sheet-${currentPlayerId}`;
-  const encoded = encodeMetadataValue(state);
+  try { currentPlayerName = await OBR.player.getName(); } catch { /* keep last known name */ }
+
+  const key = buildSheetMetadataKey(currentPlayerId);
+  const encoded = encodeMetadataValue(toRoomSheetState(state));
+  const metadataPatch = { [key]: encoded };
 
   // OBR's room metadata is capped at 16kB total across all keys. The host throws
   // this error in its own frame, where our try/catch below can't reliably see it,
   // so pre-check size against what we last saw and fall back to the local copy.
-  if (wouldExceedRoomBudget(cachedMetadata, key, encoded)) {
+  if (wouldExceedRoomBudget(cachedMetadata, metadataPatch)) {
     console.error("Skipped room save: sheet would exceed the room metadata size limit");
     showSaveError(state.theme, "Saved locally only (room full)");
     return;
   }
 
   try {
-    await OBR.room.setMetadata({ [key]: encoded });
+    await OBR.room.setMetadata(metadataPatch);
+    cachedMetadata = projectMetadata(cachedMetadata, metadataPatch);
     showSaved(state.theme);
   } catch (err) {
     console.error("Failed to save character sheet:", err);
@@ -79,10 +96,15 @@ async function saveNow() {
 
 async function load() {
   currentPlayerId = await OBR.player.getId();
+  try { currentPlayerName = await OBR.player.getName(); } catch { /* optional */ }
   const metadata = await OBR.room.getMetadata();
   cachedMetadata = metadata;
-  const roomSaved = getMetadataValue(metadata, `kob-sheet-${currentPlayerId}`);
+  currentRoomInstanceId = await resolveRoomInstanceId(OBR, metadata);
+  cachedMetadata = await OBR.room.getMetadata();
+
+  const roomSaved = getMetadataValue(cachedMetadata, buildSheetMetadataKey(currentPlayerId));
   const localSaved = loadLocalSheet();
+  const shouldPromoteLocalToRoom = isSheetNewer(localSaved, roomSaved);
   // The room save can silently fail to persist (e.g. size limit), so prefer
   // whichever of the room/local copies has the newer save timestamp.
   const saved = pickNewestSheet(roomSaved, localSaved);
@@ -99,8 +121,16 @@ async function load() {
     state.notes = mergedNotes;
   }
 
+  // Never reopen mid-edit just because the sheet was closed that way.
+  state.editingStrengths = false;
+
   persistLocalNotes();
   persistLocalSheet();
+
+  // Room copy missing (pruned by the GM, or never saved): the local copy repopulates it.
+  if (shouldPromoteLocalToRoom && saved) {
+    await promoteSheetToRoom(saved);
+  }
 }
 
 export async function initSheet(app) {
@@ -109,16 +139,33 @@ export async function initSheet(app) {
 
   if (!metadataListenerBound) {
     metadataListenerBound = true;
-    OBR.room.onMetadataChange((metadataUpdate) => {
-      // Metadata updates can be partial; merge to preserve previously known keys.
-      cachedMetadata = { ...cachedMetadata, ...metadataUpdate };
-      renderPartyPage(cachedMetadata);
-      // Only re-render the powered page when its data actually changed, so
-      // unrelated updates (other players' sheets, etc.) don't needlessly reset it.
-      if (Object.prototype.hasOwnProperty.call(metadataUpdate, POWERED_KEY)) {
-        renderPoweredPage(cachedMetadata);
+
+    // The callback's payload isn't trusted as a diff; fetch the authoritative metadata and
+    // compare per key, so we only re-render what actually changed.
+    OBR.room.onMetadataChange(async () => {
+      const seq = ++metaSeq;
+      let next;
+      try {
+        next = await OBR.room.getMetadata();
+      } catch {
+        return;
+      }
+      if (seq !== metaSeq) return; // a newer event is already in flight
+
+      const prev = cachedMetadata;
+      cachedMetadata = next;
+
+      const sheetOpts = { excludePlayerId: currentPlayerId };
+      if (partyViewSignature(prev, sheetOpts) !== partyViewSignature(next, sheetOpts)) {
+        renderPartyPage(next);
+      }
+      if (prev?.[POWERED_KEY] !== next?.[POWERED_KEY]) {
+        renderPoweredPage(next);
       }
     });
+
+    // Online/offline badges follow the connected-player list.
+    OBR.party.onChange(() => renderPartyPage(cachedMetadata));
   }
 }
 
@@ -266,10 +313,12 @@ function renderCharacterPage() {
         <option value="">— add strength —</option>
         ${STRENGTHS
           .filter(s => {
+            // "Skilled at ___" can be taken at any age (including adults, who are also
+            // granted one) and any number of times; everything else only once.
+            if (s.id === "skilled-at-___") return true;
             const isGranted = grantedIds.includes(s.id);
             const isAdded = state.strengths.some(str => getStrengthId(str) === s.id);
-            // Allow skilled-at-___ multiple times, but filter out other already-added strengths
-            return !isGranted && (!isAdded || s.id === "skilled-at-___");
+            return !isGranted && !isAdded;
           })
           .map(s => `<option value="${s.id}" ${strengthEditor.type === s.id ? "selected" : ""}>${s.label}</option>`)
           .join("")}
@@ -341,12 +390,14 @@ function resolveStrengthEntry(entry, index, granted = false) {
   if (typeof entry === "string") {
     const strength = STRENGTHS.find(item => item.id === entry);
     if (!strength) return null;
+    const isSkillSlot = granted && entry === "skilled-at-___";
     return {
       key: granted ? `granted-${entry}` : `owned-${index}`,
       index,
       granted,
       editable: false,
-      label: strength.label,
+      skillSlot: isSkillSlot,
+      label: isSkillSlot && state.grantedSkill.trim() ? `Skilled at ${state.grantedSkill.trim()}` : strength.label,
       desc: strength.desc,
     };
   }
@@ -370,7 +421,7 @@ function resolveStrengthEntry(entry, index, granted = false) {
     key: granted ? `granted-${entry.id}` : `owned-${index}`,
     index,
     granted,
-    editable: false,
+    editable: !granted && entry.id === "skilled-at-___",
     label: entry.id === "skilled-at-___" && entry.value ? `Skilled at ${entry.value}` : strength.label,
     desc: strength.desc,
   };
@@ -406,17 +457,19 @@ function renderStrengthsList(grantedIds) {
       .map((entry, index) => ({ entry, index }))
       .filter(({ entry }) => {
         const id = getStrengthId(entry);
-        return id === "custom" || !grantedIds.includes(id);
+        return id === "custom" || id === "skilled-at-___" || !grantedIds.includes(id);
       })
       .map(({ entry, index }) => resolveStrengthEntry(entry, index, false))
       .filter(Boolean),
   ];
   if (!allActive.length) return "";
-  return allActive.map(({ key, index, granted, editable, label, desc, isCustom }) => {
+  return allActive.map(({ key, index, granted, editable, label, desc, isCustom, skillSlot }) => {
     return `
       <div class="str" data-sid="${key}">
         <div class="str-left">
-          <span class="str-name">${esc(label)}</span>
+          ${skillSlot && (state.editingStrengths || !state.grantedSkill.trim())
+            ? `<span class="str-name">Skilled at</span><input class="str-inline-input" id="granted-skill-input" type="text" value="${esc(state.grantedSkill)}" placeholder="name a skill…" />`
+            : `<span class="str-name">${esc(label)}</span>`}
           ${granted ? `<span class="str-age">age</span>` : ""}
         </div>
         <div style="display:flex;align-items:center;gap:2px;">
@@ -442,6 +495,11 @@ function renderStrengthsList(grantedIds) {
 function setupCharacterListeners() {
   document.getElementById("inp-name").addEventListener("input", e => {
     state.name = e.target.value;
+    scheduleSave();
+  });
+
+  document.getElementById("granted-skill-input")?.addEventListener("input", e => {
+    state.grantedSkill = e.target.value;
     scheduleSave();
   });
 
@@ -477,6 +535,8 @@ function setupCharacterListeners() {
     const grantedForNewAge = AGE_GRANTED[newAge] || [];
     // Filter out strengths that were granted by a different age
     state.strengths = state.strengths.filter(s => {
+      // Player-picked "Skilled at X" entries belong to the player, not to an age.
+      if (s && typeof s === "object" && s.id === "skilled-at-___") return true;
       const strId = typeof s === "string" ? s : s.id;
       // Keep if it's not age-granted, or if it's granted by the new age
       return !Object.values(AGE_GRANTED).flat().includes(strId) || grantedForNewAge.includes(strId);
@@ -574,14 +634,25 @@ function setupCharacterListeners() {
     btn.addEventListener("click", () => {
       const index = Number(btn.dataset.editCustom);
       const entry = state.strengths[index];
-      if (!entry || entry.type !== "custom") return;
-      strengthEditor = {
-        type: "custom",
-        index,
-        value: "",
-        title: entry.title || "",
-        description: entry.description || "",
-      };
+      if (entry?.type === "custom") {
+        strengthEditor = {
+          type: "custom",
+          index,
+          value: "",
+          title: entry.title || "",
+          description: entry.description || "",
+        };
+      } else if (entry?.id === "skilled-at-___") {
+        strengthEditor = {
+          type: "skilled-at-___",
+          index,
+          value: entry.value || "",
+          title: "",
+          description: "",
+        };
+      } else {
+        return;
+      }
       renderCharacterPage();
     });
   });
@@ -820,59 +891,66 @@ function renderPartyPage(preloadedMetadata) {
 
 async function loadParty(preloadedMetadata) {
   try {
-  const [players, metadata] = await Promise.all([
-    OBR.party.getPlayers(),
-    preloadedMetadata ? Promise.resolve(preloadedMetadata) : OBR.room.getMetadata(),
-  ]);
-  const list = document.getElementById("party-list");
-  if (!list) return;
+    const [players, metadata] = await Promise.all([
+      OBR.party.getPlayers(),
+      preloadedMetadata ? Promise.resolve(preloadedMetadata) : OBR.room.getMetadata(),
+    ]);
+    const list = document.getElementById("party-list");
+    if (!list) return;
 
-  const sheets = players
-    .map(p => ({ player: p, data: getMetadataValue(metadata, `kob-sheet-${p.id}`) }))
-    .filter(({ data }) => data && data.name);
+    // Built from stored sheets rather than from who is connected, so players who are
+    // offline still show up. (getPlayers() never includes the current player.)
+    const onlineById = new Map(players.map(p => [p.id, p]));
+    const sheets = listSheetEntries(metadata)
+      .filter(entry => entry.playerId !== currentPlayerId && entry.data?.name)
+      .map(entry => ({ ...entry, player: onlineById.get(entry.playerId) || null }))
+      .sort((a, b) =>
+        (Number(Boolean(b.player)) - Number(Boolean(a.player)))
+        || String(a.data.name).localeCompare(String(b.data.name)));
 
-  if (!sheets.length) {
-    list.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">No sheets found.</div>`;
-    return;
-  }
+    if (!sheets.length) {
+      list.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">No sheets found.</div>`;
+      return;
+    }
 
-  list.innerHTML = sheets.map(({ player, data }) => {
-    const bonused = AGE_BONUSES[data.age] || [];
-    return `
-    <div class="party-item">
-      <div class="party-header" data-pid="${player.id}">
-        <span class="party-player-meta">${esc(data.name)} <span>&bull;</span> <em>${esc(player.name)}</em></span>
-        <div class="party-header-right">
-          <span class="party-token">${data.tokens ?? 0}</span>
-          <span class="chevron party-chevron">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="6,2 2,5 6,8"/>
-            </svg>
-          </span>
+    list.innerHTML = sheets.map(({ playerId, data, player }) => {
+      const bonused = AGE_BONUSES[data.age] || [];
+      const playerName = player?.name || data.playerName || "Unknown player";
+      return `
+      <div class="party-item ${player ? "" : "offline"}">
+        <div class="party-header" data-pid="${esc(playerId)}">
+          <span class="party-player-meta">${esc(data.name)} <span>&bull;</span> <em>${esc(playerName)}</em>${player ? "" : ` <span class="party-offline">offline</span>`}</span>
+          <div class="party-header-right">
+            <span class="party-token">${esc(data.tokens ?? 0)}</span>
+            <span class="chevron party-chevron">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6,2 2,5 6,8"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+        <div class="party-details" id="pdetail-${esc(playerId)}">
+          <div class="party-detail-row"><span>Trope</span><span>${esc(tropeLabel(data.trope, data.tropeName))}</span></div>
+          <div class="party-detail-row"><span>Age</span><span>${esc(cap(data.age || "—"))}</span></div>
+          ${STATS.map(s => `
+            <div class="party-detail-row">
+              <span>${cap(s)}</span>
+              <span>${esc(formatStatDie(data.stats?.[s], bonused.includes(s)))}</span>
+            </div>
+          `).join("")}
         </div>
       </div>
-      <div class="party-details" id="pdetail-${player.id}">
-        <div class="party-detail-row"><span>Trope</span><span>${esc(tropeLabel(data.trope, data.tropeName))}</span></div>
-        <div class="party-detail-row"><span>Age</span><span>${cap(data.age || "—")}</span></div>
-        ${STATS.map(s => `
-          <div class="party-detail-row">
-            <span>${cap(s)}</span>
-            <span>${formatStatDie(data.stats?.[s], bonused.includes(s))}</span>
-          </div>
-        `).join("")}
-      </div>
-    </div>
-  `;
-  }).join("");
+    `;
+    }).join("");
 
-  list.querySelectorAll(".party-header").forEach(header => {
-    header.addEventListener("click", () => {
-      const detail = document.getElementById(`pdetail-${header.dataset.pid}`);
-      const chevron = header.querySelector(".party-chevron");
-      detail.classList.toggle("open");
-      chevron.classList.toggle("open");
+    list.querySelectorAll(".party-header").forEach(header => {
+      header.addEventListener("click", () => {
+        const detail = document.getElementById(`pdetail-${header.dataset.pid}`);
+        const chevron = header.querySelector(".party-chevron");
+        detail?.classList.toggle("open");
+        chevron?.classList.toggle("open");
+      });
     });
-  });
   } catch (err) {
     const list = document.getElementById("party-list");
     if (list) list.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Could not load party data.</div>`;
@@ -964,7 +1042,7 @@ function cap(str) {
 }
 
 function esc(str) {
-  return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  return String(str ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
 function normalizeNotes(notes) {
@@ -1095,7 +1173,7 @@ function mergeNotesByNewest(primary, secondary) {
 }
 
 function localNotesStorageKey() {
-  return `kob-local-notes-${currentPlayerId || "unknown"}`;
+  return `kob-local-notes-${currentRoomInstanceId}-${currentPlayerId || "unknown"}`;
 }
 
 function loadLocalNotes() {
@@ -1118,7 +1196,40 @@ function persistLocalNotes() {
 }
 
 function localSheetStorageKey() {
-  return `kob-local-sheet-${currentPlayerId || "unknown"}`;
+  return `kob-local-sheet-${currentRoomInstanceId}-${currentPlayerId || "unknown"}`;
+}
+
+function toRoomSheetState(source) {
+  return {
+    name: source.name,
+    playerName: currentPlayerName || source.playerName || "",
+    age: source.age,
+    trope: source.trope,
+    tropeName: source.tropeName,
+    stats: { ...(source.stats || {}) },
+    tokens: source.tokens,
+    strengths: Array.isArray(source.strengths) ? source.strengths : [],
+    inventory: Array.isArray(source.inventory) ? source.inventory : [],
+    grantedSkill: typeof source.grantedSkill === "string" ? source.grantedSkill : "",
+    savedAt: source.savedAt,
+  };
+}
+
+async function promoteSheetToRoom(sheetSnapshot) {
+  const key = buildSheetMetadataKey(currentPlayerId);
+  const encoded = encodeMetadataValue(toRoomSheetState(sheetSnapshot));
+  const metadataPatch = { [key]: encoded };
+
+  if (wouldExceedRoomBudget(cachedMetadata, metadataPatch)) {
+    return;
+  }
+
+  try {
+    await OBR.room.setMetadata(metadataPatch);
+    cachedMetadata = projectMetadata(cachedMetadata, metadataPatch);
+  } catch {
+    // Best-effort sync only.
+  }
 }
 
 // Full, uncompressed backup of this player's own sheet. localStorage has no
@@ -1144,7 +1255,13 @@ function persistLocalSheet() {
 function pickNewestSheet(roomSheet, localSheet) {
   if (!roomSheet) return localSheet;
   if (!localSheet) return roomSheet;
-  const roomSavedAt = roomSheet.savedAt || 0;
-  const localSavedAt = localSheet.savedAt || 0;
-  return localSavedAt > roomSavedAt ? localSheet : roomSheet;
+  return isSheetNewer(localSheet, roomSheet) ? localSheet : roomSheet;
+}
+
+function isSheetNewer(candidate, baseline) {
+  if (!candidate) return false;
+  if (!baseline) return true;
+  const candidateSavedAt = Number(candidate.savedAt) || 0;
+  const baselineSavedAt = Number(baseline.savedAt) || 0;
+  return candidateSavedAt > baselineSavedAt;
 }

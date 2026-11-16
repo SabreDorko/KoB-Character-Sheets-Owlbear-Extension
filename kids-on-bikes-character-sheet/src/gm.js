@@ -3,12 +3,25 @@ import TROPES from "./data/tropes.json";
 import STRENGTHS from "./data/strengths.json";
 import ageRules from "./data/age-rules.json";
 import { showSaving, showSaved, showSaveError } from "./save-indicator.js";
-import { encodeMetadataValue, getMetadataValue, wouldExceedRoomBudget } from "./metadata-codec.js";
+import {
+  encodeMetadataValue,
+  getMetadataValue,
+  wouldExceedRoomBudget,
+  projectMetadata,
+  buildSheetMetadataKey,
+  listSheetEntries,
+  partyViewSignature,
+  measureMetadata,
+  findLegacyKeys,
+  buildRemovePatch,
+  resolveRoomInstanceId,
+  POWERED_KEY,
+  GM_NOTES_KEY,
+  ROOM_METADATA_LIMIT,
+} from "./metadata-codec.js";
 
 const STATS = ["fight", "flight", "brains", "brawn", "charm", "grit"];
 const DIES = ["d20", "d12", "d10", "d8", "d6", "d4"];
-const POWERED_KEY = "kob-powered-sheet";
-const GM_NOTES_KEY = "kob-gm-notes";
 const GM_THEME_KEY = "kob-gm-theme";
 
 const AGE_BONUSES = ageRules.bonuses;
@@ -26,12 +39,14 @@ let selectedPlayerId = null;
 let gmTheme = "light";
 let cachedPlayers = [];
 let cachedMetadata = {};
+let metaSeq = 0;
 let gmNotes = [];
 let activeGMNoteId = null;
 let gmNoteView = "list";
 
 const GM_LOCAL_NOTES_KEY = "kob-gm-local-notes";
 const POWERED_LOCAL_KEY = "kob-powered-local";
+let currentRoomInstanceId = "unknown-room";
 
 export async function initGM(app) {
   appRoot = app;
@@ -42,42 +57,64 @@ export async function initGM(app) {
   ]);
   cachedPlayers = players;
   cachedMetadata = metadata;
-  // The room save can silently fail to persist (e.g. size limit), so prefer
-  // whichever of the room/local copies has the newer save timestamp.
-  poweredState = pickNewestPoweredState(getPoweredState(metadata), loadLocalPoweredState());
-  gmNotes = mergeGMNotesByNewest(getGMNotes(metadata), loadLocalGMNotes());
-  persistLocalGMNotes();
-  renderGMApp(metadata);
+  currentRoomInstanceId = await resolveRoomInstanceId(OBR, metadata);
+  cachedMetadata = await OBR.room.getMetadata();
 
+  const roomPowered = getPoweredState(cachedMetadata);
+  const roomNotes = getGMNotes(cachedMetadata);
+  // The room save can fail to persist (e.g. size limit), so prefer whichever of the
+  // room/local copies is newer.
+  poweredState = pickNewestPoweredState(roomPowered, loadLocalPoweredState());
+  gmNotes = mergeGMNotesByNewest(roomNotes, loadLocalGMNotes());
+  persistLocalGMNotes();
+  renderGMApp(cachedMetadata);
+
+  // If the local copy is ahead of the room (e.g. the room copy was lost), push it back up.
+  if ((poweredState.updatedAt || 0) > (roomPowered.updatedAt || 0)) void savePowered();
+  if (JSON.stringify(gmNotes) !== JSON.stringify(roomNotes)) void saveGMNotes();
+
+  // Connected players changed: refresh online/offline state.
   OBR.party.onChange(updatedPlayers => {
     cachedPlayers = updatedPlayers;
     renderPartyPage(cachedMetadata);
   });
 
-  OBR.room.onMetadataChange(metadataUpdate => {
-    // Metadata updates can be partial; merge to avoid dropping unrelated keys.
-    cachedMetadata = { ...cachedMetadata, ...metadataUpdate };
-    renderPartyPage(cachedMetadata);
+  // Fetch authoritative metadata and compare per key, so only what actually changed
+  // re-renders (and an in-progress edit isn't clobbered by the echo of our own save).
+  OBR.room.onMetadataChange(async () => {
+    const seq = ++metaSeq;
+    let next;
+    try {
+      next = await OBR.room.getMetadata();
+    } catch {
+      return;
+    }
+    if (seq !== metaSeq) return;
 
-    // Only touch powered/notes state when their own keys changed, so unrelated
-    // updates (e.g. a player editing their own sheet) don't clobber an
-    // in-progress, not-yet-saved edit (like a power description being typed).
-    // The metadata event can deliver a stale snapshot racing a concurrent
-    // write elsewhere, so only accept it if it isn't older than our local copy.
-    if (Object.prototype.hasOwnProperty.call(metadataUpdate, POWERED_KEY)) {
-      const incomingPowered = getPoweredState(cachedMetadata);
-      const accepted = (incomingPowered.updatedAt || 0) >= (poweredState.updatedAt || 0);
-      if (accepted) {
-        poweredState = incomingPowered;
+    const prev = cachedMetadata;
+    cachedMetadata = next;
+
+    const viewOpts = { includeUsage: true };
+    if (partyViewSignature(prev, viewOpts) !== partyViewSignature(next, viewOpts)) {
+      renderPartyPage(next);
+    }
+
+    if (prev?.[POWERED_KEY] !== next?.[POWERED_KEY]) {
+      const incoming = getPoweredState(next);
+      // Strictly newer only: our own save echoes back with an equal timestamp.
+      if ((incoming.updatedAt || 0) > (poweredState.updatedAt || 0)) {
+        poweredState = incoming;
         renderPoweredPage();
       }
     }
 
-    if (Object.prototype.hasOwnProperty.call(metadataUpdate, GM_NOTES_KEY)) {
-      gmNotes = getGMNotes(cachedMetadata);
-      gmNotes = mergeGMNotesByNewest(gmNotes, loadLocalGMNotes());
-      persistLocalGMNotes();
-      renderGMNotesPage();
+    if (prev?.[GM_NOTES_KEY] !== next?.[GM_NOTES_KEY]) {
+      const merged = mergeGMNotesByNewest(getGMNotes(next), gmNotes);
+      if (JSON.stringify(merged) !== JSON.stringify(gmNotes)) {
+        gmNotes = merged;
+        persistLocalGMNotes();
+        renderGMNotesPage();
+      }
     }
   });
 }
@@ -178,72 +215,168 @@ function renderPartyPage(preloadedMetadata) {
   loadPartyPage(preloadedMetadata);
 }
 
+function formatKB(bytes) {
+  return `${(bytes / 1000).toFixed(1)} kB`;
+}
+
+function renderUsageMeter(usage) {
+  const pct = Math.min(100, Math.round((usage.total / ROOM_METADATA_LIMIT) * 100));
+  const level = pct >= 95 ? "full" : pct >= 80 ? "warn" : "";
+  return `
+    <div class="usage">
+      <div class="usage-bar"><div class="usage-fill ${level}" style="width:${pct}%"></div></div>
+      <div class="usage-text">Room storage ${formatKB(usage.total)} of ~${formatKB(ROOM_METADATA_LIMIT)} &middot; Kids on Bikes ${formatKB(usage.own)} &middot; other extensions ${formatKB(usage.others)}</div>
+    </div>
+  `;
+}
+
+function renderPartyRow({ playerId, data, player }) {
+  const d = data || {};
+  const bonused = AGE_BONUSES[d.age] || [];
+  const online = Boolean(player);
+  const playerName = player?.name || d.playerName || "Unknown player";
+  const label = data ? (d.name || "Unnamed") : "Unreadable sheet";
+  return `
+    <div class="party-item ${online ? "" : "offline"}">
+      <div class="party-header" data-pid="${esc(playerId)}">
+        <span class="party-player-meta">${esc(label)} <span>&bull;</span> <em>${esc(playerName)}</em>${online ? "" : ` <span class="party-offline">offline</span>`}</span>
+        <div class="party-header-right">
+          <span class="party-token">Tokens: ${esc(d.tokens ?? 0)}</span>
+          ${data ? `<button class="str-add-btn" data-view-player="${esc(playerId)}" type="button">View</button>` : ""}
+          ${online ? "" : `<button class="str-add-btn party-prune-btn" data-prune-player="${esc(playerId)}" type="button">Prune</button>`}
+          <span class="chevron party-chevron">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6,2 2,5 6,8"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+      <div class="party-details" id="pdetail-${esc(playerId)}">
+        <div class="party-detail-row"><span>Trope</span><span>${esc(tropeLabel(d.trope, d.tropeName))}</span></div>
+        <div class="party-detail-row"><span>Age</span><span>${esc(cap(d.age || "-"))}</span></div>
+        ${STATS.map(stat => `
+          <div class="party-detail-row">
+            <span>${cap(stat)}</span>
+            <span>${esc(formatStatDie(d.stats?.[stat], bonused.includes(stat)))}</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+// Two-step button: first click arms it ("Confirm?"), second click within 3s runs it.
+// (window.confirm isn't reliable inside an OBR popover.)
+function armConfirm(button, onConfirm) {
+  button.addEventListener("click", event => {
+    event.stopPropagation();
+    if (button.dataset.armed === "1") {
+      onConfirm();
+      return;
+    }
+    const label = button.textContent;
+    button.dataset.armed = "1";
+    button.textContent = "Confirm?";
+    setTimeout(() => {
+      if (!button.isConnected) return;
+      button.dataset.armed = "";
+      button.textContent = label;
+    }, 3000);
+  });
+}
+
+// Removes metadata keys. Players' local copies are untouched, so a pruned player who
+// reconnects repopulates their sheet from local storage.
+async function pruneKeys(keys) {
+  if (!keys.length) return;
+  const patch = buildRemovePatch(keys);
+  showSaving(gmTheme);
+  try {
+    await OBR.room.setMetadata(patch);
+    cachedMetadata = projectMetadata(cachedMetadata, patch);
+    if (selectedPlayerId && keys.includes(buildSheetMetadataKey(selectedPlayerId))) {
+      selectedPlayerId = null;
+    }
+    showSaved(gmTheme);
+  } catch (err) {
+    console.error("Failed to prune room metadata:", err);
+    showSaveError(gmTheme, "Prune failed");
+  }
+  renderPartyPage(cachedMetadata);
+}
+
 async function loadPartyPage(preloadedMetadata) {
   const list = document.getElementById("party-list");
   if (!list) return;
 
   try {
-  const players = cachedPlayers;
-  const metadata = preloadedMetadata ?? cachedMetadata ?? await OBR.room.getMetadata();
+    const metadata = preloadedMetadata ?? cachedMetadata;
+    const onlineById = new Map(cachedPlayers.map(player => [player.id, player]));
 
-  const sheets = players
-    .map(player => ({ player, data: getMetadataValue(metadata, `kob-sheet-${player.id}`) }))
-    .filter(({ data }) => data && data.name);
+    // Built from stored sheets, so players who are offline still appear.
+    const entries = listSheetEntries(metadata)
+      .map(entry => ({ ...entry, player: onlineById.get(entry.playerId) || null }))
+      .filter(entry => (entry.player ? Boolean(entry.data?.name) : true))
+      .sort((a, b) =>
+        (Number(Boolean(b.player)) - Number(Boolean(a.player)))
+        || String(a.data?.name || "").localeCompare(String(b.data?.name || "")));
 
-  if (!sheets.length) {
-    list.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">No character sheets found.</div>`;
-    return;
-  }
+    const offline = entries.filter(entry => !entry.player);
+    const legacy = findLegacyKeys(metadata);
+    const legacyBytes = legacy.reduce((sum, item) => sum + item.bytes, 0);
 
-  list.innerHTML = sheets.map(({ player, data }) => {
-    const bonused = AGE_BONUSES[data.age] || [];
-    return `
-      <div class="party-item">
-        <div class="party-header" data-pid="${player.id}">
-          <span class="party-player-meta">${esc(data.name || player.name)} <span>&bull;</span> <em>${esc(player.name)}</em></span>
-          <div class="party-header-right">
-            <span class="party-token">Adversity Tokens: ${data.tokens ?? 0}</span>
-            <button class="str-add-btn" data-view-player="${player.id}" type="button">View</button>
-            <span class="chevron party-chevron">
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6,2 2,5 6,8"/>
-              </svg>
-            </span>
-          </div>
-        </div>
-        <div class="party-details" id="pdetail-${player.id}">
-          <div class="party-detail-row"><span>Trope</span><span>${esc(tropeLabel(data.trope, data.tropeName))}</span></div>
-          <div class="party-detail-row"><span>Age</span><span>${cap(data.age || "-")}</span></div>
-          ${STATS.map(stat => `
-            <div class="party-detail-row">
-              <span>${cap(stat)}</span>
-              <span>${formatStatDie(data.stats?.[stat], bonused.includes(stat))}</span>
-            </div>
-          `).join("")}
-        </div>
-      </div>
+    list.innerHTML = `
+      ${renderUsageMeter(measureMetadata(metadata))}
+      ${entries.length
+        ? entries.map(renderPartyRow).join("")
+        : `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">No character sheets found.</div>`}
+      ${offline.length || legacy.length ? `
+        <div class="party-tools">
+          ${offline.length ? `<button class="str-add-btn" id="btn-prune-offline" type="button">Prune all offline (${offline.length})</button>` : ""}
+          ${legacy.length ? `<button class="str-add-btn" id="btn-prune-legacy" type="button">Remove old data (${formatKB(legacyBytes)})</button>` : ""}
+        </div>` : ""}
     `;
-  }).join("");
 
-  list.querySelectorAll("[data-view-player]").forEach(button => {
-    button.addEventListener("click", event => {
-      event.stopPropagation();
-      selectedPlayerId = button.dataset.viewPlayer;
-      renderPartyPage(cachedMetadata);
+    list.querySelectorAll("[data-view-player]").forEach(button => {
+      button.addEventListener("click", event => {
+        event.stopPropagation();
+        selectedPlayerId = button.dataset.viewPlayer;
+        renderPartyPage(cachedMetadata);
+      });
     });
-  });
 
-  list.querySelectorAll(".party-header").forEach(header => {
-    header.addEventListener("click", () => {
-      const detail = document.getElementById(`pdetail-${header.dataset.pid}`);
-      const chevron = header.querySelector(".party-chevron");
-      detail.classList.toggle("open");
-      chevron.classList.toggle("open");
+    list.querySelectorAll(".party-header").forEach(header => {
+      header.addEventListener("click", () => {
+        const detail = document.getElementById(`pdetail-${header.dataset.pid}`);
+        const chevron = header.querySelector(".party-chevron");
+        detail?.classList.toggle("open");
+        chevron?.classList.toggle("open");
+      });
     });
-  });
+
+    list.querySelectorAll("[data-prune-player]").forEach(button => {
+      armConfirm(button, () => pruneKeys([buildSheetMetadataKey(button.dataset.prunePlayer)]));
+    });
+
+    const pruneAll = document.getElementById("btn-prune-offline");
+    if (pruneAll) {
+      armConfirm(pruneAll, async () => {
+        // Re-check who is connected right now so we never prune someone who just rejoined.
+        try { cachedPlayers = await OBR.party.getPlayers(); } catch { /* use cached list */ }
+        const onlineNow = new Set(cachedPlayers.map(player => player.id));
+        pruneKeys(listSheetEntries(cachedMetadata)
+          .filter(entry => !onlineNow.has(entry.playerId))
+          .map(entry => entry.key));
+      });
+    }
+
+    const pruneLegacy = document.getElementById("btn-prune-legacy");
+    if (pruneLegacy) {
+      armConfirm(pruneLegacy, () => pruneKeys(legacy.map(item => item.key)));
+    }
   } catch (err) {
-    const list = document.getElementById("party-list");
-    if (list) list.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Could not load party data.</div>`;
+    const target = document.getElementById("party-list");
+    if (target) target.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">Could not load party data.</div>`;
     console.error("loadPartyPage error:", err);
   }
 }
@@ -257,8 +390,9 @@ async function loadPlayerSheetView(preloadedMetadata) {
   const metadata = preloadedMetadata ?? cachedMetadata ?? await OBR.room.getMetadata();
 
   const player = players.find(item => item.id === selectedPlayerId);
-  const data = getMetadataValue(metadata, `kob-sheet-${selectedPlayerId}`);
-  if (!player || !data) {
+  const data = getMetadataValue(metadata, buildSheetMetadataKey(selectedPlayerId));
+  const playerName = player?.name || data?.playerName || "Offline player";
+  if (!data || typeof data !== "object") {
     container.innerHTML = `<div class="f" style="justify-content:center;font-size:10px;opacity:0.5;">That sheet is no longer available.</div>`;
     return;
   }
@@ -266,23 +400,23 @@ async function loadPlayerSheetView(preloadedMetadata) {
   const bonused = AGE_BONUSES[data.age] || [];
 
   container.innerHTML = `
-    <div class="powered-field"><span class="pe-label">Character</span><span>${esc(data.name || player.name)}</span></div>
-    <div class="powered-field"><span class="pe-label">Player</span><span><em>${esc(player.name)}</em></span></div>
+    <div class="powered-field"><span class="pe-label">Character</span><span>${esc(data.name || playerName)}</span></div>
+    <div class="powered-field"><span class="pe-label">Player</span><span><em>${esc(playerName)}</em></span></div>
     <div class="powered-field"><span class="pe-label">Trope</span><span>${esc(tropeLabel(data.trope, data.tropeName))}</span></div>
-    <div class="powered-field"><span class="pe-label">Age</span><span>${cap(data.age || "-")}</span></div>
+    <div class="powered-field"><span class="pe-label">Age</span><span>${esc(cap(data.age || "-"))}</span></div>
     <div class="sh">Stats</div>
     <div class="sgrid">
       ${STATS.map(stat => `
         <div class="si">
           <span class="sn">${cap(stat)}${bonused.includes(stat) ? `<span class="sb">+1</span>` : ""}</span>
-          <span class="sd">${formatStatDie(data.stats?.[stat], bonused.includes(stat))}</span>
+          <span class="sd">${esc(formatStatDie(data.stats?.[stat], bonused.includes(stat)))}</span>
         </div>
       `).join("")}
     </div>
     <div class="sh">Adversity Tokens</div>
     <div class="pe-row">
       <span class="pe-label">Current</span>
-      <span class="pe-val">${data.tokens ?? 0}</span>
+      <span class="pe-val">${esc(data.tokens ?? 0)}</span>
     </div>
     <div class="sh">Inventory</div>
     <div>
@@ -294,7 +428,13 @@ async function loadPlayerSheetView(preloadedMetadata) {
     <div>
       ${(() => {
         const grantedIds = AGE_GRANTED[data.age] || [];
-        const allStrengths = mergeStrengthEntries(grantedIds, data.strengths || []);
+        // An adult's granted "Skilled at ___" carries the skill name the player chose.
+        const grantedEntries = grantedIds.map(id => (
+          id === "skilled-at-___" && String(data.grantedSkill || "").trim()
+            ? { id, value: String(data.grantedSkill).trim() }
+            : id
+        ));
+        const allStrengths = mergeStrengthEntries(grantedEntries, data.strengths || []);
         return allStrengths.length
           ? allStrengths.map((strength, index) => `
               <div class="str">
@@ -778,18 +918,20 @@ async function savePowered() {
   persistLocalPoweredState();
 
   const encoded = encodeMetadataValue(poweredState);
+  const metadataPatch = { [POWERED_KEY]: encoded };
 
   // OBR's room metadata is capped at 16kB total across all keys. The host throws
   // this error in its own frame, where our try/catch below can't reliably see it,
   // so pre-check size against what we last saw and fall back to the local copy.
-  if (wouldExceedRoomBudget(cachedMetadata, POWERED_KEY, encoded)) {
+  if (wouldExceedRoomBudget(cachedMetadata, metadataPatch)) {
     console.error("Skipped room save: powered character would exceed the room metadata size limit");
     showSaveError(gmTheme, "Saved locally only (room full)");
     return;
   }
 
   try {
-    await OBR.room.setMetadata({ [POWERED_KEY]: encoded });
+    await OBR.room.setMetadata(metadataPatch);
+    cachedMetadata = projectMetadata(cachedMetadata, metadataPatch);
     showSaved(gmTheme);
   } catch (err) {
     console.error("Failed to save powered character:", err);
@@ -808,15 +950,17 @@ async function saveGMNotes() {
   persistLocalGMNotes();
 
   const encoded = encodeMetadataValue(gmNotes);
+  const metadataPatch = { [GM_NOTES_KEY]: encoded };
 
-  if (wouldExceedRoomBudget(cachedMetadata, GM_NOTES_KEY, encoded)) {
+  if (wouldExceedRoomBudget(cachedMetadata, metadataPatch)) {
     console.error("Skipped room save: GM notes would exceed the room metadata size limit");
     showSaveError(gmTheme, "Saved locally only (room full)");
     return;
   }
 
   try {
-    await OBR.room.setMetadata({ [GM_NOTES_KEY]: encoded });
+    await OBR.room.setMetadata(metadataPatch);
+    cachedMetadata = projectMetadata(cachedMetadata, metadataPatch);
     showSaved(gmTheme);
   } catch (err) {
     console.error("Failed to save GM notes:", err);
@@ -967,7 +1111,7 @@ function mergeGMNotesByNewest(primary, secondary) {
 
 function loadLocalGMNotes() {
   try {
-    const raw = localStorage.getItem(GM_LOCAL_NOTES_KEY);
+    const raw = localStorage.getItem(localGMNotesStorageKey());
     if (!raw) return [];
     return getGMNotes({ [GM_NOTES_KEY]: JSON.parse(raw) });
   } catch {
@@ -979,7 +1123,7 @@ function loadLocalGMNotes() {
 // meaningful size limit, so this survives even when the shared room save fails.
 function loadLocalPoweredState() {
   try {
-    const raw = localStorage.getItem(POWERED_LOCAL_KEY);
+    const raw = localStorage.getItem(localPoweredStorageKey());
     if (!raw) return null;
     return getPoweredState({ [POWERED_KEY]: JSON.parse(raw) });
   } catch {
@@ -989,7 +1133,7 @@ function loadLocalPoweredState() {
 
 function persistLocalPoweredState() {
   try {
-    localStorage.setItem(POWERED_LOCAL_KEY, JSON.stringify(poweredState));
+    localStorage.setItem(localPoweredStorageKey(), JSON.stringify(poweredState));
   } catch {
     // Best-effort cache only.
   }
@@ -1020,10 +1164,18 @@ function persistGMTheme() {
 
 function persistLocalGMNotes() {
   try {
-    localStorage.setItem(GM_LOCAL_NOTES_KEY, JSON.stringify(gmNotes));
+    localStorage.setItem(localGMNotesStorageKey(), JSON.stringify(gmNotes));
   } catch {
     // Best-effort cache only.
   }
+}
+
+function localGMNotesStorageKey() {
+  return `${GM_LOCAL_NOTES_KEY}-${currentRoomInstanceId}`;
+}
+
+function localPoweredStorageKey() {
+  return `${POWERED_LOCAL_KEY}-${currentRoomInstanceId}`;
 }
 
 function normalizeNumberInput(value) {
@@ -1097,7 +1249,7 @@ function cap(str) {
 }
 
 function esc(str) {
-  return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function tropeOptionLabel(trope, customName = "") {

@@ -34,9 +34,9 @@ body {
   overflow: hidden;
 }
 
-/* THEME */
-body.light { background: var(--pl); }
-body.dark  { background: var(--dl); }
+/* THEME: base text colour for anything without a more specific rule */
+.light { color: var(--pk); }
+.dark  { color: var(--dk); }
 
 /* SAVE INDICATOR */
 .save-indicator {
@@ -1003,3 +1003,69 @@ input.inv-input {
   align-items: center;
 }
 .chevron.open { transform: rotate(-90deg); }
+
+/* PARTY: chevron, offline state, tools */
+.light .party-chevron svg { stroke: var(--pkm); }
+.dark  .party-chevron svg { stroke: var(--dkm); }
+
+.party-item.offline .party-player-meta { opacity: 0.65; }
+
+.party-offline {
+  font-size: 9px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-style: normal;
+}
+.light .party-offline { background: var(--pm); color: var(--pkm); }
+.dark  .party-offline { background: var(--dm); color: var(--dkm); }
+
+.party-tools {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+
+/* ROOM STORAGE METER (GM) */
+.usage {
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+.usage-bar {
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.light .usage-bar { background: var(--pd); }
+.dark  .usage-bar { background: var(--dd); }
+.usage-fill { height: 100%; border-radius: 999px; }
+.light .usage-fill { background: var(--pa); }
+.dark  .usage-fill { background: var(--da); }
+.usage-fill.warn { background: #d08a1e; }
+.usage-fill.full { background: #c0392b; }
+.usage-text { font-size: 9px; letter-spacing: 0.02em; }
+.light .usage-text { color: var(--pkm); }
+.dark  .usage-text { color: var(--dkm); }
+
+/* INLINE GRANTED-SKILL INPUT */
+input.str-inline-input {
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  font-size: 11px;
+  font-family: inherit;
+  border: none;
+  border-bottom: 0.5px dashed;
+  background: transparent;
+  outline: none;
+  padding: 0 2px;
+}
+.light input.str-inline-input { color: var(--pk); border-color: var(--pkf); }
+.dark  input.str-inline-input { color: var(--dk); border-color: var(--dkf); }
+.light input.str-inline-input::placeholder { color: var(--pkf); }
+.dark  input.str-inline-input::placeholder { color: var(--dkf); }
