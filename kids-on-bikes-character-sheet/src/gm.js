@@ -15,7 +15,6 @@ import {
   findLegacyKeys,
   buildRemovePatch,
   resolveRoomInstanceId,
-  entryBytes,
   POWERED_KEY,
   GM_NOTES_KEY,
   ROOM_METADATA_LIMIT,
@@ -48,7 +47,6 @@ let gmNoteView = "list";
 const GM_LOCAL_NOTES_KEY = "kob-gm-local-notes";
 const POWERED_LOCAL_KEY = "kob-powered-local";
 let currentRoomInstanceId = "unknown-room";
-let storageInspectorKeys = [];
 
 export async function initGM(app) {
   appRoot = app;
@@ -137,12 +135,10 @@ function renderGMApp(initialMetadata) {
         <div class="top-tab active" data-tab="party">Party</div>
         <div class="top-tab" data-tab="powered">Powered Character</div>
         <div class="top-tab" data-tab="notes">Notes</div>
-        <div class="top-tab" data-tab="storage">Storage</div>
       </div>
       <div class="page active" data-page="party" id="page-party"></div>
       <div class="page" data-page="powered" id="page-powered"></div>
       <div class="page" data-page="notes" id="page-notes"></div>
-      <div class="page" data-page="storage" id="page-storage"></div>
     </div>
   `;
 
@@ -167,8 +163,6 @@ function setupTabListeners() {
       appRoot.querySelector(`[data-page="${tab.dataset.tab}"]`).classList.add("active");
       if (tab.dataset.tab === "party") {
         refreshGMPartyPage();
-      } else if (tab.dataset.tab === "storage") {
-        renderStoragePage(cachedMetadata);
       }
     });
   });
@@ -1270,167 +1264,4 @@ function tropeLabel(id, customName = "") {
   if (!trope) return "-";
   if (trope.id === "custom" && customName.trim()) return customName.trim();
   return trope.label;
-}
-
-// ─── Storage Inspector ─────────────────────────────────────────────
-
-function renderStoragePage(metadata) {
-  const page = document.getElementById("page-storage");
-  if (!page) return;
-
-  try {
-    const storageBreakdown = buildStorageBreakdown(metadata);
-    const usage = measureMetadata(metadata);
-
-    page.innerHTML = `
-      <div class="sh">Storage Inspector</div>
-      ${renderUsageMeter(usage)}
-      <div class="storage-inspector">
-        <div class="storage-section">
-          <div class="storage-section-title">Room Metadata Breakdown</div>
-          <div class="storage-items">
-            ${storageBreakdown.items.map((item, idx) => `
-              <div class="storage-item">
-                <div class="storage-item-header">
-                  <span class="storage-item-key">${esc(item.key)}</span>
-                  <span class="storage-item-size">${formatKB(item.bytes)}</span>
-                </div>
-                <div class="storage-item-type">${esc(item.type)}</div>
-                ${item.decodable ? `<div class="storage-item-preview">${esc(item.preview)}</div>` : `<div class="storage-item-preview" style="color:red;">⚠️ Unreadable or corrupt data</div>`}
-                <button class="str-remove storage-delete-btn" data-storage-delete="${idx}" title="Delete this key">Delete</button>
-              </div>
-            `).join("")}
-          </div>
-        </div>
-        ${storageBreakdown.unknown.length ? `
-          <div class="storage-section">
-            <div class="storage-section-title">Unknown/Suspicious Keys (${storageBreakdown.unknown.length})</div>
-            <p style="font-size:11px;opacity:0.7;margin:8px 0;">These keys don't match known patterns. They may be from old builds or corrupted data.</p>
-            <div class="storage-items">
-              ${storageBreakdown.unknown.map((item, idx) => `
-                <div class="storage-item suspicious">
-                  <div class="storage-item-header">
-                    <span class="storage-item-key">${esc(item.key)}</span>
-                    <span class="storage-item-size">${formatKB(item.bytes)}</span>
-                  </div>
-                  <div class="storage-item-type">Unknown origin</div>
-                  <div class="storage-item-preview" style="color:#f59e0b;">Value (first 100 chars): ${esc(String(item.rawValue).slice(0, 100))}</div>
-                  <button class="str-remove storage-delete-btn" data-storage-delete-unknown="${idx}" title="Delete this key">Delete</button>
-                </div>
-              `).join("")}
-            </div>
-          </div>
-        ` : ""}
-      </div>
-    `;
-
-    // Attach delete handlers
-    storageBreakdown.items.forEach((item, idx) => {
-      const btn = page.querySelector(`[data-storage-delete="${idx}"]`);
-      if (btn) {
-        armConfirm(btn, () => deleteStorageKey(item.key));
-      }
-    });
-
-    storageBreakdown.unknown.forEach((item, idx) => {
-      const btn = page.querySelector(`[data-storage-delete-unknown="${idx}"]`);
-      if (btn) {
-        armConfirm(btn, () => deleteStorageKey(item.key));
-      }
-    });
-  } catch (err) {
-    page.innerHTML = `<div style="padding:16px;color:red;">Error loading storage inspector: ${esc(String(err))}</div>`;
-    console.error("Storage inspector error:", err);
-  }
-}
-
-function buildStorageBreakdown(metadata) {
-  const items = [];
-  const unknown = [];
-  const knownPatterns = new Set([
-    "kob-sheet-",
-    "kob-powered-sheet",
-    "kob-gm-notes",
-    "kob-room-instance"
-  ]);
-
-  Object.entries(metadata || {}).forEach(([key, rawValue]) => {
-    if (rawValue === undefined) return;
-
-    const bytes = entryBytes(key, rawValue);
-    let type = "Unknown";
-    let preview = "";
-    let decodable = false;
-    let isKnown = false;
-
-    // Identify key type
-    if (key === "kob-room-instance") {
-      type = "Room Instance ID";
-      isKnown = true;
-      const decoded = getMetadataValue(metadata, key);
-      decodable = true;
-      preview = `Value: ${esc(String(decoded || ""))}`;
-    } else if (key === "kob-powered-sheet") {
-      type = "Powered Character (GM)";
-      isKnown = true;
-      const decoded = getMetadataValue(metadata, key);
-      decodable = !!decoded;
-      preview = decodable ? "Powered character data (compressed)" : "Failed to decode";
-    } else if (key === "kob-gm-notes") {
-      type = "GM Notes";
-      isKnown = true;
-      const decoded = getMetadataValue(metadata, key);
-      decodable = !!decoded;
-      preview = decodable ? `${Array.isArray(decoded) ? decoded.length : 0} notes` : "Failed to decode";
-    } else if (key.startsWith("kob-sheet-")) {
-      type = "Character Sheet";
-      isKnown = true;
-      const playerId = key.slice("kob-sheet-".length);
-      const decoded = getMetadataValue(metadata, key);
-      decodable = !!decoded && typeof decoded === "object";
-      preview = decodable ? `Player: ${esc(decoded.name || "Unnamed")}` : "Failed to decode";
-    } else if (key.startsWith("kob-")) {
-      type = "Kids on Bikes (Legacy/Unknown)";
-    } else {
-      type = "Other Extension";
-    }
-
-    const item = {
-      key,
-      type,
-      bytes,
-      preview,
-      decodable,
-      rawValue
-    };
-
-    if (isKnown) {
-      items.push(item);
-    } else if (key.startsWith("kob-")) {
-      unknown.push(item);
-    }
-  });
-
-  // Sort by size descending
-  items.sort((a, b) => b.bytes - a.bytes);
-  unknown.sort((a, b) => b.bytes - a.bytes);
-
-  return { items, unknown };
-}
-
-async function deleteStorageKey(key) {
-  const patch = { [key]: undefined };
-  showSaving(gmTheme);
-  try {
-    await OBR.room.setMetadata(patch);
-    cachedMetadata = projectMetadata(cachedMetadata, patch);
-    showSaved(gmTheme);
-    const page = document.getElementById("page-storage");
-    if (page && page.classList.contains("active")) {
-      renderStoragePage(cachedMetadata);
-    }
-  } catch (err) {
-    console.error("Failed to delete storage key:", err);
-    showSaveError(gmTheme, "Delete failed");
-  }
 }

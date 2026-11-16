@@ -70,7 +70,7 @@ export function getMetadataValue(metadata, key) {
 const encoder = new TextEncoder();
 const byteLength = str => encoder.encode(str).length;
 
-export function entryBytes(key, value) {
+function entryBytes(key, value) {
   const json = JSON.stringify(value);
   return byteLength(JSON.stringify(key)) + byteLength(json === undefined ? "null" : json) + 2;
 }
